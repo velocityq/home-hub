@@ -25,7 +25,7 @@ the ids there and in `config.json` to fit yours.
 | `hub/homemcp/` | Claude tools (an MCP server) that call only the contract's actions |
 | `hub/fake_hub.py` | A fake hub with made up devices, for building and testing without a house |
 | `wall/` | The wall screen (plain HTML, CSS and JavaScript, no framework, no outside requests) |
-| `tablet/` | The Android wall app: shows the wall screen, records the voice while the mic is held, optional on device Face ID |
+| `tablet/` | The Android wall app: shows the wall screen, records the voice while the mic is held, on device Face ID (models included) |
 | `scripts/` | `privacy-scan.sh` (run before every commit) and `export-public.sh` |
 
 ## What it needs
@@ -75,8 +75,11 @@ The first start makes `~/.home-hub/keys.json` (mode 600) with keys for `wall`, `
 - A question the simple rules cannot answer goes to Claude with the house state (aircon, speakers,
   TVs) and the words. Calendars and names are never sent.
 - A person's card shows calendar event titles and times only: never a place, description, attendee or link.
-- Face ID (optional) runs on the tablet. It keeps up to 10 lists of 128 numbers per person in the app's
+- Face ID is built in and runs on the tablet. It keeps up to 10 lists of 128 numbers per person in the app's
   private storage, never a picture, and tells the hub only a name.
+  The two models ship in `tablet/assets/`. The face matching model (MobileFaceNet, Apache 2.0 as
+  published by Qualcomm AI Hub) was trained on MS-Celeb-1M, a dataset Microsoft withdrew in 2019 over
+  privacy concerns. Only the weights are included, no dataset images. Details in `THIRD-PARTY.md`.
 - `scripts/privacy-scan.sh` checks the tree and the git history for secrets, private addresses, emails,
   phone numbers, home paths, image metadata and your own denylist (`~/.home-hub/denylist.txt`). It must
   print `findings: 0` before anything is published.
