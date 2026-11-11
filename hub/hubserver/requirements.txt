@@ -1,0 +1,12 @@
+# The real home hub (part A). Install into the shared venv:
+#   cd hub && .venv/bin/pip install -r hubserver/requirements.txt
+aiohttp==3.14.5         # web server, WebSocket, couch-tv bridge and Spotify calls
+airtouch5py==0.5.1      # AirTouch 5 console, local TCP 9005
+PyChromecast==14.1.1    # the 3 ceiling speakers and their Google Home groups
+zeroconf==0.154.0       # Cast discovery (mDNS)
+# Ask (hub/ask) needs nothing more; it uses /opt/homebrew/bin/ffmpeg, whisper-cli and claude.
+# tests
+pytest==9.2.0
+pytest-asyncio==1.4.1.post1
+icalendar==7.3.0       # personal cards: private calendar addresses (iCal)
+recurring-ical-events==3.8.2   # ... with repeating events

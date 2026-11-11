@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The wall tablet's app: shows the home hub's wall screen full screen and records the voice
+     itself while the mic button is held. Since 11 Nov 2026 it is also the tablet's home screen and
+     comes forward by itself after a restart (BootStart). The AirTouch app and its aircon service
+     are separate apps and keep running exactly as before, behind it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.homehub.wall"
+    android:versionCode="4"
+    android:versionName="1.3">
+
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Face ID: the camera is read on the tablet only, never recorded or sent. See FaceEngine. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- Granted once over adb (pm grant). Lets AdbWatchdog switch Wireless debugging back on if the tablet drops it. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- BootStart: open the hub after a restart. Display over other apps is granted once over adb. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Android 11 hides other apps unless they are named here: needed to open the AirTouch app. -->
+    <queries>
+        <package android:name="au.com.polyaire.airtouch5.console" />
+    </queries>
+
+    <application
+        android:name="com.homehub.wall.AdbWatchApp"
+        android:label="Home"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- The tablet's home screen: the home button comes back here. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name="com.homehub.wall.BootStart"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name="com.homehub.wall.AdbWatchJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+    </application>
+</manifest>

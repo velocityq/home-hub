@@ -1,0 +1,6 @@
+# Already in the shared hub/.venv. Nothing else is needed (HTTP uses the standard library).
+mcp>=2.3,<3
+pydantic>=2
+anyio>=4
+# tests only
+pytest>=8

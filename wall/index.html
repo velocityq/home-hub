@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280,height=800,initial-scale=1,user-scalable=no">
+<meta name="referrer" content="no-referrer">
+<!-- Only this page's own scripts run: a song title or calendar event that sneaks in some HTML can never
+     run code here (the tablet app gives this page the microphone and Face ID). Cover art may come from
+     any https address. No frames at all. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>Home hub</title>
+<!-- The hub serves this page at "/" and the files next to it under "/wall/". -->
+<base href="/wall/">
+<link rel="icon" href="data:,">
+<script src="lite.js"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <div id="scene"></div>
+  <div class="shade" id="shade"></div>
+  <div class="ui" id="ui"></div>
+  <div class="note" id="note"></div>
+  <div class="banner" id="banner" role="status" aria-live="polite"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<script src="scenes/scenes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

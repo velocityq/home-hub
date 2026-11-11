@@ -1,0 +1,3 @@
+Spotify logo files, unaltered, from Spotify's design guidelines: https://developer.spotify.com/documentation/design
+(2024-spotify-logo-icon.zip: Primary_Logo_Green_RGB.svg ; 2024-spotify-full-logo.zip: Full_Logo_Green_RGB.svg), downloaded 11 Nov 2026.
+Rules kept: icon never under 21px, full logo never under 70px, no recolour, no stretch, no rotation, not used in a sentence.

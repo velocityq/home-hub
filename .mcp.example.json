@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "home": {
+      "type": "stdio",
+      "command": "/path/to/home-hub/hub/.venv/bin/python",
+      "args": ["/path/to/home-hub/hub/homemcp"],
+      "env": {}
+    }
+  }
+}

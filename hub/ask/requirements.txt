@@ -1,0 +1,5 @@
+# The Ask module needs only what the hub venv already has.
+aiohttp>=3.9        # hub_client.py
+# tests
+pytest>=8
+pytest-asyncio>=0.23

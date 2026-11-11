@@ -1,0 +1,33 @@
+{
+  "port": 8790,
+  "host": "0.0.0.0",
+  "airtouch_host": null,
+  "airtouch_port": 9005,
+  "bridge_url": "http://127.0.0.1:5400",
+  "bridge_key": null,
+  "speakers": {
+    "lounge-room": {"cast": "Lounge Room Speaker", "name": "Lounge Room"},
+    "theatre": {"cast": "THEATRE", "name": "Theatre"},
+    "outside": {"cast": "OUTSIDE", "name": "Outside"}
+  },
+  "speaker_model": "WiFiCeilingSpeakerV2",
+  "zones": {
+    "living": "Living", "media": "Media", "rumpus": "Rumpus", "master-bed": "Master Bed",
+    "bed-2": "Bed 2", "bed-3": "Bed 3", "bed-4": "Bed 4"
+  },
+  "inside_zone": "living",
+  "tv_names": {"living-room": "Living Room", "bedroom": "Bedroom", "frame": "The Frame"},
+  "cors_origins": [],
+  "allowed_hosts": [],
+  "people": ["Sam", "Alex"],
+  "place": "Riverside",
+  "personal": {
+    "Sam": {"calendars": [{"name": "Work", "snapshot": "~/path/to/a/calendar-export.json"}]}
+  },
+  "spotify_redirect_uri": "http://127.0.0.1:8790/spotify/callback",
+  "ask": {
+    "claude_model": "haiku",
+    "log_speech": false,
+    "tv_words": {"bedroom": ["sony tv", "sony"]}
+  }
+}

@@ -1,0 +1,26 @@
+hub/.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+.pytest_cache/
+node_modules/
+.claude/
+/tmp/
+# secrets never go in git
+keys.json
+spotify*.json
+*.key
+tablet/out/
+recordings/
+# local backups and private notes
+*.bak
+*.bak-*
+recordings/
+tablet/out/
+# private settings for this house: copy the *.example.* files
+.mcp.json
+denylist.txt
+# screenshots the wall tests make (kept locally, never published)
+wall/tests/shots/
+e2e/shots/
