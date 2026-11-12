@@ -53,6 +53,19 @@ def build(cfg, keys=None):
     return make_app(hub, keys or cfgmod.Keys(), cfg)
 
 
+def _lan_address():
+    """This Mac's address on the home network, for the tablet to type. No packet is sent: connecting a UDP
+    socket only picks the outgoing interface. None when there is no network."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))
+            ip = s.getsockname()[0]
+        return ip if not ip.startswith("127.") else None
+    except OSError:
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python -m hubserver", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -103,7 +116,12 @@ def main(argv=None):
         cfgmod.ensure_home()
         code = cfgmod.new_pair_code()
         print(f"Pairing code: {code}")
-        print("It works once, for 10 minutes. On the new device send it to POST /api/pair "
+        addr = _lan_address()
+        if addr:
+            port = a.port or cfgmod.load_config().get("port", 8790)
+            print(f"Hub address:  {addr}" + ("" if port == 8790 else f":{port}"))
+            print("On the wall tablet's first screen, type the address and the code, then tap Connect.")
+        print("It works once, for 10 minutes. Other devices send it to POST /api/pair "
               "with a name, for example {\"code\": \"%s\", \"name\": \"phone-sam\"}." % code)
         return
 

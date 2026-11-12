@@ -34,6 +34,22 @@ class Bridge {
     @JavascriptInterface
     public String version() { return "1"; }
 
+    /** First run only (the setup screen in assets/setup.html): pair with the hub at a home network
+     *  address with the 6 digit code from `hubserver pair`, then keep the address and the new key.
+     *  Refused on any other page, so the hub's own page can never change where the app points. */
+    @JavascriptInterface
+    public String pair(String addr, String code) {
+        if (!a.setupShowing) return MainActivity.result(false, "Setup is not open.");
+        return a.pairWith(addr, code);
+    }
+
+    /** The "not answering" page offers this: go back to the setup screen to type a new address. */
+    @JavascriptInterface
+    public void changeHub() {
+        if (!a.offline) return;
+        a.ui.post(a::showSetup);
+    }
+
     @JavascriptInterface
     public String startRecording() {
         if (a.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

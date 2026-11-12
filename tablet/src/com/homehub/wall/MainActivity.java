@@ -59,6 +59,8 @@ public class MainActivity extends Activity {
     MediaRecorder rec;
     File recFile;
     boolean offline;
+    volatile boolean setupShowing;
+    final Runnable retry = this::load;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -134,16 +136,84 @@ public class MainActivity extends Activity {
         offline = false;
         String key = prefs.getString("key", null);
         if (hubUrl().isEmpty()) {
-            web.loadDataWithBaseURL(null, "<html><body style='margin:0;background:#0b0b0f;color:#fff;font-family:sans-serif;"
-                + "padding:48px;font-size:22px'><h1>Set the hub address</h1><p>From the computer that runs the hub:</p>"
-                + "<pre style='white-space:pre-wrap;font-size:18px'>adb shell am start -n com.homehub.wall/.MainActivity "
-                + "--es hub http://&lt;hub address&gt;:8790/ --es key &lt;the wall key&gt;</pre></body></html>",
-                "text/html", "utf-8", null);
+            showSetup();
             return;
         }
+        setupShowing = false;
         // The page keeps the key in its own storage and clears it from the address straight away.
         // "?v=" makes every load a real page load (a change after "#" alone would not reload it).
         web.loadUrl(hubUrl() + "?v=" + System.currentTimeMillis() + (key != null ? "#key=" + key : ""));
+    }
+
+    /** The first run screen (assets/setup.html): the hub address and a pairing code, typed on the tablet. */
+    void showSetup() {
+        ui.removeCallbacks(retry);
+        offline = false;
+        String html;
+        try (java.io.InputStream in = getAssets().open("setup.html")) {
+            html = new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            html = "<html><body style='background:#0b0b0f;color:#fff;font-family:sans-serif;padding:48px'>"
+                + "<h1>Set the hub address</h1></body></html>";
+        }
+        setupShowing = true;
+        web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
+    }
+
+    static byte[] readAll(java.io.InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        return out.toByteArray();
+    }
+
+    static String result(boolean ok, String error) {
+        try {
+            org.json.JSONObject o = new org.json.JSONObject().put("ok", ok);
+            if (error != null) o.put("error", error);
+            return o.toString();
+        } catch (org.json.JSONException e) {
+            return "{\"ok\":false}";
+        }
+    }
+
+    /** Runs on the bridge's own thread (never the UI thread). Home network addresses only. */
+    String pairWith(String addr, String code) {
+        String a = addr == null ? "" : addr.trim().replaceFirst("^https?://", "").replaceFirst("/+$", "");
+        if (!a.contains(":")) a = a + ":8790";
+        String hub = "http://" + a + "/";
+        if (!hub.matches(LAN_URL)) return result(false, "Type the address the pair command showed, like 192.168.x.x");
+        if (code == null || !code.matches("[0-9]{6}")) return result(false, "The code is 6 numbers.");
+        java.net.HttpURLConnection c = null;
+        try {
+            c = (java.net.HttpURLConnection) new java.net.URL(hub + "api/pair").openConnection();
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(12000);
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            byte[] body = new org.json.JSONObject().put("code", code).put("name", "wall-tablet").toString()
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            c.getOutputStream().write(body);
+            int status = c.getResponseCode();
+            java.io.InputStream in = status < 400 ? c.getInputStream() : c.getErrorStream();
+            org.json.JSONObject r = new org.json.JSONObject(in == null ? "{}" : new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8));
+            String key = r.optString("key", "");
+            if (status == 200 && r.optBoolean("ok") && key.matches("[A-Za-z0-9_\\-]{16,128}")) {
+                prefs.edit().putString("hub", hub).putString("key", key).apply();
+                ui.postDelayed(this::load, 600);
+                return result(true, null);
+            }
+            return result(false, r.optString("error", "The hub said no. Make a new code and try again."));
+        } catch (java.net.SocketTimeoutException | java.net.ConnectException e) {
+            return result(false, "No hub answered at " + a + ". Check the address and that the tablet is on the same Wi-Fi.");
+        } catch (IOException | org.json.JSONException | RuntimeException e) {
+            Log.w(TAG, "pair: " + e);
+            return result(false, "That did not work. Check the address and try again.");
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     void showOffline() {
@@ -153,11 +223,14 @@ public class MainActivity extends Activity {
                 + "display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column'>"
                 + "<div style='font-size:30px;font-weight:600'>The home hub is not answering</div>"
                 + "<div style='font-size:20px;opacity:.7;margin-top:12px'>Trying again every few seconds.</div>"
-                + "<button onclick='HubAndroid.openAirTouch()' style='margin-top:36px;font-size:20px;padding:16px 28px;"
-                + "border-radius:28px;border:0;background:#3aa0ff;color:#fff'>Open the AirTouch app</button>"
+                + (getPackageManager().getLaunchIntentForPackage(AIRTOUCH) == null ? "<div style='height:20px'></div>"
+                : "<button onclick='HubAndroid.openAirTouch()' style='margin-top:36px;font-size:20px;padding:16px 28px;"
+                + "border-radius:28px;border:0;background:#3aa0ff;color:#fff'>Open the AirTouch app</button>")
+                + "<button onclick='HubAndroid.changeHub()' style='margin-top:16px;font-size:18px;padding:14px 26px;"
+                + "border-radius:28px;border:1px solid rgba(255,255,255,.3);background:none;color:#fff'>Connect to a different hub</button>"
                 + "</body></html>";
         web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
-        ui.postDelayed(this::load, 5000);
+        ui.postDelayed(retry, 5000);
     }
 
     void immersive() {

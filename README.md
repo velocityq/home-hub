@@ -36,7 +36,8 @@ the ids there and in `config.json` to fit yours.
   The hub strips any `ANTHROPIC_API_KEY` before it runs Claude, so it never bills an API key.
 - The devices you have: an AirTouch 5 console, Cast speakers, couch-tv for TVs. Each part is optional:
   a missing device shows as "not answering" and the rest works.
-- For the tablet app: the Android SDK (build-tools 34, platform 34) and JDK 21. No Gradle.
+- For the wall: an Android tablet on Android 11 or newer, on the same Wi-Fi as the Mac. The app is a
+  download (below). Building it yourself needs the Android SDK (build-tools 34, platform 34) and JDK 21. No Gradle.
 
 ## Set up
 
@@ -59,11 +60,27 @@ The first start makes `~/.home-hub/keys.json` (mode 600) with keys for `wall`, `
 | Link Spotify | Open `http://127.0.0.1:8790/spotify/login` on the hub Mac and follow the page |
 | Add a calendar to someone's card | `.venv/bin/python -m hubserver calendar Sam --label Family`, paste the private iCal address (it is not shown) |
 | Use the Claude tools here | Copy `.mcp.example.json` to `.mcp.json` and put your paths in it |
-| Build the tablet app | `sh tablet/build.sh` (makes its own signing key in `~/.home-hub/` the first time: keep it) |
-| Point the tablet at the hub | `adb shell am start -n com.homehub.wall/.MainActivity --es hub http://<hub address>:8790/ --es key <wall key>` |
-| Undo | `sh hub/deploy/uninstall.sh` (your keys and settings stay in `~/.home-hub`) |
+| Put the app on the tablet | On the tablet, open https://github.com/Seagey/home-hub/releases/latest/download/home-hub-tablet.apk in the browser, install it (allow installs from the browser if Android asks), open **Home** |
+| Connect the tablet | On the Mac: `cd hub && .venv/bin/python -m hubserver pair`. It shows the hub address and a 6 digit code: type both on the tablet's first screen and tap Connect |
+| Build the tablet app yourself | `sh tablet/build.sh` (makes its own signing key in `~/.home-hub/` the first time: keep it) |
+| Point a self built app at the hub | `adb shell am start -n com.homehub.wall/.MainActivity --es hub http://<hub address>:8790/ --es key <wall key>` |
+| Undo | `sh hub/deploy/uninstall.sh` (your keys and settings stay in `~/.home-hub`). On the tablet: press and hold **Home**, App info, Uninstall |
 
 `AGENTS.md` walks an AI agent through the same set up, one question at a time.
+
+### The tablet download
+
+`home-hub-tablet.apk` on the [latest release](https://github.com/Seagey/home-hub/releases/latest) is built from this
+repo with `PUBLIC_BUILD=1` (no hub address inside, so it opens on its own setup screen) and signed with the
+project's release key. It holds no names, addresses, keys or Face ID data: those are made on your own hub and
+tablet. It also asks to be the tablet's Home app, so the Home button brings the wall back; pick your usual
+launcher instead if you prefer. An app you build yourself is signed with your own key, so switching between the
+download and your own build means uninstalling first.
+
+## Website
+
+The project website is made from this README, `AGENTS.md` and `SECURITY.md`. When a change here alters what it
+does, what it needs, the setup or removal steps or the download, the website changes in the same piece of work.
 
 ## Privacy
 

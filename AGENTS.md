@@ -40,7 +40,7 @@ showing you the wall screen with pretend devices first. It touches nothing in yo
 6. Claude: may questions the simple rules do not cover go to Claude on their own Claude plan? Only the
    house state and the words go, never names or calendars. If no, set `"ask": {"claude_bin": "none"}`
    in `config.json`: the simple rules still work and anything else gets "Claude is not set up".
-7. A wall tablet? Android 11 or newer, with Developer options and Wireless debugging on.
+7. A wall tablet? Android 11 or newer, on the same Wi-Fi. Nothing else is needed on it: the app is a download.
 
 Never ask for a password. Spotify is linked by them in a browser on the Mac; calendar addresses are
 pasted by them into a prompt that does not show what is typed.
@@ -58,7 +58,10 @@ requests if they said yes, Spotify calls), and how to undo it. Wait for a clear 
 2. `sh hub/deploy/install.sh`. It checks the hub answers on `http://127.0.0.1:8790/api/health`.
 3. `sh hub/deploy/open-wall.sh` opens the wall screen with its key. Check the cards show their devices.
 4. Spotify: they open `http://127.0.0.1:8790/spotify/login` and follow the page.
-5. Tablet (if any): `sh tablet/build.sh`, put the hub address in `~/.home-hub/tablet-hub-url` first or
+5. Tablet (if any): they open https://github.com/Seagey/home-hub/releases/latest/download/home-hub-tablet.apk
+   in the tablet's browser, install it and open **Home**. Then run `cd hub && .venv/bin/python -m hubserver pair`
+   and read them the address and the 6 digit code to type on the tablet. Building it instead (developers):
+   `sh tablet/build.sh`, put the hub address in `~/.home-hub/tablet-hub-url` first or
    send it with `--es hub`, install with `adb install -r tablet/out/home-hub-wall.apk`, then
    `adb shell am start -n com.homehub.wall/.MainActivity --es hub http://<hub address>:8790/ --es key <wall key>`.
    Read the wall key from `~/.home-hub/keys.json` into the command without printing it.
@@ -76,9 +79,16 @@ requests if they said yes, Spotify calls), and how to undo it. Wait for a clear 
 
 ```sh
 sh hub/deploy/uninstall.sh                    # stops the hub, removes the launchd service
-adb uninstall com.homehub.wall                # the tablet app, if installed
+adb uninstall com.homehub.wall                # the tablet app (or on the tablet: hold Home, App info, Uninstall)
 rm -rf ~/.home-hub                            # only if they want their keys and settings gone too: ask first
 ```
+
+## Keeping the docs and the website accurate
+
+The project website is built from README.md, AGENTS.md and SECURITY.md. Any change that alters what the hub
+does, what it needs, the set up or removal steps, or the tablet download updates README.md, this file and the
+website in the same piece of work. A release of the tablet app keeps the asset name `home-hub-tablet.apk`, a
+`v<versionName>` tag and a higher `versionCode`, so the download link never changes.
 
 ## Rules while you work
 

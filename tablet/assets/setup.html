@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- First run screen of the wall app, shown when no hub address is set. Lives in the app (assets/),
+     never fetched. It talks to the app through window.HubAndroid.pair(address, code), which pairs
+     with the hub over the home network and keeps the address and the new key in the app's storage. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #0b0b0f; color: #fff; font-family: sans-serif; -webkit-font-smoothing: antialiased; }
+  body { display: grid; place-items: center; padding: 32px; }
+  main { width: min(880px, 100%); }
+  h1 { font-size: 38px; font-weight: 700; letter-spacing: -.01em; }
+  .lead { font-size: 20px; line-height: 1.45; color: rgba(255,255,255,.72); margin-top: 10px; max-width: 46em; }
+  pre { font-family: monospace; font-size: 18px; background: rgba(255,255,255,.08); padding: 14px 20px; border-radius: 14px; margin-top: 16px; white-space: pre-wrap; }
+  code { font-family: monospace; font-size: 17px; background: rgba(255,255,255,.1); padding: 3px 8px; border-radius: 8px; color: #fff; }
+  form { display: grid; grid-template-columns: 1.4fr 1fr auto; gap: 14px; margin-top: 34px; align-items: end; }
+  label { display: grid; gap: 8px; font-size: 16px; font-weight: 600; color: rgba(255,255,255,.75); }
+  input { height: 64px; border-radius: 32px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08);
+          color: #fff; font-size: 24px; padding: 0 24px; outline: none; width: 100%; }
+  input:focus { border-color: #3aa0ff; background: rgba(58,160,255,.12); }
+  button { height: 64px; border-radius: 32px; border: 0; background: #1f78d6; color: #fff; font-size: 22px; font-weight: 600; padding: 0 34px; }
+  button:disabled { opacity: .5; }
+  .msg { min-height: 30px; margin-top: 18px; font-size: 19px; }
+  .msg.bad { color: #ff9b8a; }
+  .msg.good { color: #7ee2a0; }
+  ol { margin-top: 30px; padding-left: 24px; font-size: 18px; line-height: 1.6; color: rgba(255,255,255,.72); }
+  @media (max-width: 700px) { form { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect to your home hub</h1>
+  <p class="lead">On the Mac that runs the hub, open Terminal in the home-hub folder and run this. It shows the
+    address to type here and a 6 digit code.</p>
+  <pre>cd hub &amp;&amp; .venv/bin/python -m hubserver pair</pre>
+  <form id="f" autocomplete="off">
+    <label>Hub address<input id="addr" inputmode="decimal" placeholder="192.168.x.x" spellcheck="false"></label>
+    <label>Code<input id="code" inputmode="numeric" maxlength="6" placeholder="123456"></label>
+    <button id="go" type="submit">Connect</button>
+  </form>
+  <p class="msg" id="msg" role="status"></p>
+  <ol>
+    <li>The tablet and the Mac must be on the same Wi-Fi.</li>
+    <li>The code works once, for 10 minutes. Run the command again for a new one.</li>
+    <li>The tablet only ever talks to the hub, on your home network.</li>
+  </ol>
+</main>
+<script>
+  var f = document.getElementById('f'), msg = document.getElementById('msg'), go = document.getElementById('go');
+  function say(t, cls) { msg.textContent = t; msg.className = 'msg ' + (cls || ''); }
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var addr = document.getElementById('addr').value.trim(), code = document.getElementById('code').value.trim();
+    if (!/^\d{6}$/.test(code)) { say('The code is 6 numbers.', 'bad'); return; }
+    if (!addr) { say('Type the hub address first.', 'bad'); return; }
+    go.disabled = true; say('Connecting...');
+    setTimeout(function () {
+      var r = {};
+      try { r = JSON.parse(window.HubAndroid.pair(addr, code)); } catch (err) { r = { ok: false, error: 'Something went wrong. Try again.' }; }
+      if (r.ok) { say('Connected. Opening the wall screen.', 'good'); }
+      else { go.disabled = false; say(r.error || 'That did not work. Try again.', 'bad'); }
+    }, 30);
+  });
+</script>
+</body>
+</html>

@@ -5,8 +5,8 @@
      are separate apps and keep running exactly as before, behind it. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.homehub.wall"
-    android:versionCode="4"
-    android:versionName="1.3">
+    android:versionCode="5"
+    android:versionName="1.4">
 
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
 

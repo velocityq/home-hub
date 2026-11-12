@@ -6,7 +6,7 @@ Home hub's own code is MIT (`LICENSE`). These parts are not ours and keep their 
 
 | What | Where | Licence | Notes |
 |---|---|---|---|
-| Google LiteRT (TensorFlow Lite runtime) 1.4.2 | `tablet/libs/litert-1.4.2.jar`, `litert-api-1.4.2.jar`, `tablet/jni/armeabi-v7a/libtensorflowlite_jni.so` | Apache 2.0 | Full text in `tablet/libs/LITERT-LICENSE.txt`. Runs the face models on the tablet |
+| Google LiteRT (TensorFlow Lite runtime) 1.4.2 | `tablet/libs/litert-1.4.2.jar`, `litert-api-1.4.2.jar`, `tablet/jni/armeabi-v7a/` and `tablet/jni/arm64-v8a/libtensorflowlite_jni.so` (unchanged from the AAR on Google Maven) | Apache 2.0 | Full text in `tablet/libs/LITERT-LICENSE.txt`. Runs the face models on the tablet |
 | Spotify icon and logo | `wall/assets/spotify-*.svg` | Spotify brand terms, not MIT | Unaltered files from Spotify's design guidelines (`wall/assets/SOURCE.txt`). Use only as Spotify allows: no recolour, stretch or rotation, minimum sizes kept. Not covered by this repo's licence |
 | Wall scenes (mountain, night) | `wall/scenes/` | Ours, MIT | Made offline with Z-Image Turbo (Apache 2.0) through mflux (MIT). No people, logos, text or real place |
 | Depth clock method | `wall/scenes/scenes.js`, wall scene layers | MIT | Adapted from couch-tv (github.com/Seagey/couch-tv). The sky finding route and the edge step are roliusz's work from their couch-tv fork |
