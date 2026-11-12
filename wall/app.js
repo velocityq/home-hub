@@ -27,6 +27,7 @@ const I = {
   group: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   chev: '<path d="M9 5l7 7-7 7"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/>',
   gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/><circle cx="12" cy="12" r="7"/>',
@@ -577,6 +578,22 @@ function tvAppMark(name) {
   }
   return `<span class="tvword" aria-hidden="true">${esc(name)}</span>`;
 }
+// Each TV's own list of services (the ones signed in there), kept on this tablet. No list yet: all of them.
+const TVL = (() => { try { const v = JSON.parse(localStorage.getItem("hub.tvapps")); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } })();
+let tvEdit = null;                          // the TV whose list is being changed (the + button)
+function saveTvl() { try { localStorage.setItem("hub.tvapps", JSON.stringify(TVL)); } catch (e) { /* private mode */ } }
+function tvShown(tv, all) { const l = TVL[tv]; return Array.isArray(l) ? l.filter((a) => all.includes(a)) : all.slice(); }
+const tvPill = (a, tv, doName, sel) => `<button class="pill tvapp ${sel ? "sel" : ""}" data-do="${doName}" data-tv="${esc(tv)}" data-arg="${esc(a)}" aria-label="${esc(a)}" title="${esc(a)}">${tvAppMark(a)}</button>`;
+function tvEditBox(t, all) {
+  const shown = tvShown(t.id, all), rest = all.filter((a) => !shown.includes(a));
+  return `<div class="col" style="gap:10px">
+      <div class="sub" style="font-size:14px">On this TV's panel. Drag to change the order, tap one to take it off.</div>
+      <div class="row tvorder" style="gap:8px 6px;flex-wrap:wrap">${shown.map((a) => tvPill(a, t.id, "tvAppHide")).join("") || `<div class="sub">None yet.</div>`}</div>
+      <div class="sub" style="font-size:14px;margin-top:6px">Add a service. It opens on the TV so you can sign in there.</div>
+      <div class="row" style="gap:8px 6px;flex-wrap:wrap">${rest.map((a) => tvPill(a, t.id, "tvAppAdd")).join("") || `<div class="sub">Every service is on the panel.</div>`}</div>
+      <div class="row" style="margin-top:4px"><button class="pill sel" data-do="tvEdit" data-tv="${esc(t.id)}" style="height:48px;padding:0 24px">Done</button></div>
+    </div>`;
+}
 function sheetTvs() {
   const tvs = TV();
   if (!tvs || !tvs.available) return `<div style="padding-right:76px"><h2>TVs</h2></div><div style="margin-top:30px">${down("TVs not answering")}</div>`;
@@ -586,7 +603,9 @@ function sheetTvs() {
     const on = t.power === "on";
     const scr = t.waking ? `<div class="screen waking"><span><span class="spin"></span>Waking up…</span></div>`
       : on ? `<div class="screen on">${esc(t.app || "On")}</div>` : t.art_mode ? `<div class="screen artmode">Art mode</div>` : `<div class="screen">Off</div>`;
-    const apps = (tvs.apps || []).map((a) => `<button class="pill tvapp ${on && t.app === a ? "sel" : ""}" data-do="tvApp" data-tv="${esc(t.id)}" data-arg="${esc(a)}" aria-label="${esc(a)}" title="${esc(a)}">${tvAppMark(a)}</button>`).join("");
+    const all = tvs.apps || [], editing = tvEdit === t.id;
+    const apps = tvShown(t.id, all).map((a) => tvPill(a, t.id, "tvApp", on && t.app === a)).join("") +
+      `<button class="pill tvapp tvadd" data-do="tvEdit" data-tv="${esc(t.id)}" aria-label="Add or remove services" title="Add or remove services">${svg("plus")}</button>`;
     const art = t.art_mode != null ? `<div class="row"><div class="grow" style="font-size:17px;font-weight:600">Art mode when off</div>
         <button class="sw ${t.art_mode ? "on" : ""}" data-do="frameArt" data-tv="${esc(t.id)}" aria-label="Art mode"></button></div>`
       : anyArt ? '<div style="height:38px"></div>' : "";
@@ -594,8 +613,8 @@ function sheetTvs() {
     return `<div class="tvcard ${on ? "on" : ""}" data-tvcard="${esc(t.id)}">
       <div class="row"><div class="col grow" style="min-width:0"><div style="font-size:22px;font-weight:700" class="ellip">${esc(t.name)}</div><div class="sub" style="font-size:14px">${esc(tvKind(t))}</div></div>
         <button class="btn round ${on ? "green" : ""} ${t.waking ? "busy" : ""}" data-do="tvPower" data-tv="${esc(t.id)}" aria-label="Power" style="width:64px;height:64px">${svg("power")}</button></div>
-      ${scr}
-      <div class="row" style="gap:8px 6px;flex-wrap:wrap;${dim}">${apps}</div>
+      ${editing ? tvEditBox(t, all) : `${scr}
+      <div class="row" style="gap:8px 6px;flex-wrap:wrap;${dim}">${apps}</div>`}
       <div class="row" style="gap:10px;margin-top:auto;${dim}">
         <button class="btn" data-do="tvVol" data-tv="${esc(t.id)}" data-arg="-1" aria-label="Volume down">−</button>
         <div class="grow" style="text-align:center;font-size:22px;font-weight:600">${t.muted ? "Muted" : t.volume != null ? "Volume " + t.volume : "Volume"}</div>
@@ -990,6 +1009,7 @@ function openSocket() {
   ws = sock;
   sock.onopen = () => {
     backoff = 1000; setConn("online"); render();
+    checkWallFiles();                         // the hub may have been restarted with new wall files
     pingTimer = setInterval(() => {
       if (sock.readyState !== 1) return;
       sock.send(JSON.stringify({ type: "ping" }));
@@ -1017,6 +1037,34 @@ function hubLost() {
   setConn("offline");
 }
 setInterval(() => { if (S.conn === "offline") banner(); }, 1000);
+
+// ---------- new wall files: reload ----------
+// The tablet keeps this page open for days. Every few minutes (and when the hub comes back) the page, its
+// scripts and its styles are asked for their ETag; when one changed, the page reloads itself, but only while
+// nobody is using it (no sheet open, not recording). The key is kept in localStorage, so a reload keeps it.
+const WALL_FILES = [location.origin + location.pathname,
+  ...[...document.querySelectorAll("script[src], link[rel=stylesheet]")].map((e) => e.src || e.href)];
+let wallMark = null, wallNew = false;
+async function wallFingerprint() {
+  const parts = await Promise.all(WALL_FILES.map(async (u) => {
+    const r = await fetch(u, { method: "HEAD", cache: "no-store" });
+    if (!r.ok) throw new Error("not ok");
+    return (r.headers.get("ETag") || "") + "|" + (r.headers.get("Last-Modified") || "") + "|" + (r.headers.get("Content-Length") || "");
+  }));
+  return parts.join(" ");
+}
+async function checkWallFiles() {
+  if (!wallNew) {
+    let f;
+    try { f = await wallFingerprint(); } catch (e) { return; }      // the hub is away: try again later
+    if (wallMark === null) { wallMark = f; return; }
+    wallNew = f !== wallMark;
+  }
+  if (wallNew && !S.open && !REC.rec && !REC.held && S.conn === "online") location.reload();
+}
+checkWallFiles();
+setInterval(checkWallFiles, 5 * 60 * 1000);
+setInterval(() => { if (wallNew) checkWallFiles(); }, 15 * 1000);  // waiting for nobody to be using it
 
 function needKey(wrong) {
   dropSocket(); clearTimeout(retryTimer);
@@ -1134,6 +1182,15 @@ const DO = {
   },
   tvPower: (_, tv) => { const t = tvList(TV()).find((x) => x.id === tv); if (t) act("tv.power", { tv, on: !(t.power === "on" || t.waking) }); },
   tvApp: (app, tv) => act("tv.launch", { tv, app }),
+  tvEdit: (_, tv) => { tvEdit = tvEdit === tv ? null : tv; renderSheet(); },
+  tvAppHide: (app, tv) => { TVL[tv] = tvShown(tv, (TV() || {}).apps || []).filter((a) => a !== app); saveTvl(); renderSheet(); },
+  tvAppAdd: (app, tv) => {
+    const l = tvShown(tv, (TV() || {}).apps || []); if (!l.includes(app)) l.push(app);
+    TVL[tv] = l; saveTvl(); renderSheet();
+    const t = tvList(TV()).find((x) => x.id === tv);
+    if (t && t.power === "on") { act("tv.launch", { tv, app }); toast(`Opening ${app} on the ${t.name} TV. Sign in there.`, 4500); }
+    else toast(`${app} is on the panel. Turn the TV on and open it to sign in.`, 4500);
+  },
   tvVol: (d, tv) => act("tv.volume", { tv, delta: Number(d) }),
   tvMute: (_, tv) => { const t = tvList(TV()).find((x) => x.id === tv); if (t) act("tv.mute", { tv, muted: !t.muted }); },
   frameArt: (_, tv) => { const t = tvList(TV()).find((x) => x.id === (tv || "frame")); if (t) act("tv.art_mode", { tv: t.id, on: !t.art_mode }); },
@@ -1164,6 +1221,51 @@ const LOCAL = {
   },
   askFill: (t) => { const i = $("#askText"); if (i) { i.value = t; i.focus(); } },
 };
+// ---------- drag to reorder a TV's services (in the + editor; a tap still takes one off) ----------
+let tvDrag = null, swallowClick = false;
+stage.addEventListener("pointerdown", (e) => {
+  const p = e.target.closest && e.target.closest(".tvorder [data-do=tvAppHide]");
+  if (!p || e.button > 0) return;
+  tvDrag = { el: p, box: p.parentElement, id: e.pointerId, x0: e.clientX, y0: e.clientY, moving: false };
+});
+stage.addEventListener("pointermove", (e) => {
+  const d = tvDrag; if (!d || e.pointerId !== d.id) return;
+  const dx = e.clientX - d.x0, dy = e.clientY - d.y0;
+  if (!d.moving) {
+    if (Math.hypot(dx, dy) < 10) return;
+    d.moving = true; d.el.classList.add("dragging");
+    try { d.el.setPointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+  }
+  const r = d.el.getBoundingClientRect(), k = r.width / (d.el.offsetWidth || 1) || 1;   // the stage is scaled
+  d.el.style.transform = `translate(${dx / k}px, ${dy / k}px) scale(1.08)`;
+  // the pill under the finger (by centre) is where it would go
+  const others = [...d.box.querySelectorAll("[data-do=tvAppHide]")].filter((x) => x !== d.el);
+  let best = null, bestD = Infinity;
+  for (const o of others) {
+    const b = o.getBoundingClientRect(), dd = Math.hypot(b.left + b.width / 2 - e.clientX, b.top + b.height / 2 - e.clientY);
+    if (dd < bestD) { bestD = dd; best = o; }
+  }
+  others.forEach((o) => o.classList.toggle("droptarget", o === best));
+  d.target = best ? { arg: best.dataset.arg, after: e.clientX > best.getBoundingClientRect().left + best.getBoundingClientRect().width / 2 } : null;
+});
+function endTvDrag(e, cancel) {
+  const d = tvDrag; if (!d || e.pointerId !== d.id) return;
+  tvDrag = null;
+  if (!d.moving) return;                      // a tap: the click takes it off as before
+  swallowClick = true; setTimeout(() => { swallowClick = false; }, 400);
+  const tv = d.el.dataset.tv, app = d.el.dataset.arg;
+  if (!cancel && d.target) {
+    const l = tvShown(tv, (TV() || {}).apps || []).filter((a) => a !== app);
+    const i = l.indexOf(d.target.arg);
+    l.splice(i + (d.target.after ? 1 : 0), 0, app);
+    TVL[tv] = l; saveTvl();
+  }
+  renderSheet();
+}
+stage.addEventListener("pointerup", (e) => endTvDrag(e, false));
+stage.addEventListener("pointercancel", (e) => endTvDrag(e, true));
+stage.addEventListener("click", (e) => { if (swallowClick) { swallowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+
 stage.addEventListener("click", (e) => {
   if (e.target.closest(".mic")) return;
   const d = e.target.closest("[data-do]");
