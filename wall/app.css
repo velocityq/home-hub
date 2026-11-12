@@ -312,6 +312,21 @@ html.lighter .keypanel .box { box-shadow: none; background: rgb(28, 33, 45); }
 .splogo { display: block; width: auto; }
 .pill.tvapp { height: 52px; min-width: 64px; padding: 0 16px; justify-content: center; }
 .pill.tvapp svg { display: block; }
+/* the TV remote */
+.remote { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 4px 0; }
+.dpad { position: relative; width: 236px; height: 236px; border-radius: 50%; background: rgba(255,255,255,.1);
+  display: grid; grid-template: 1fr 1fr 1fr / 1fr 1fr 1fr; place-items: center; }
+.rk { display: flex; align-items: center; justify-content: center; color: #fff; border-radius: 50%; touch-action: manipulation; }
+.rk svg { width: 30px; height: 30px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.rk:active { background: rgba(255,255,255,.22); }
+.dpad .rk { width: 72px; height: 72px; }
+.dpad .up { grid-area: 1 / 2; } .dpad .up svg { transform: rotate(-90deg); }
+.dpad .left { grid-area: 2 / 1; } .dpad .left svg { transform: rotate(180deg); }
+.dpad .right { grid-area: 2 / 3; }
+.dpad .down { grid-area: 3 / 2; } .dpad .down svg { transform: rotate(90deg); }
+.dpad .ok { grid-area: 2 / 2; width: 84px; height: 84px; background: rgba(255,255,255,.18); font-size: 22px; font-weight: 700; }
+.rrow { gap: 14px; justify-content: center; }
+.rrow .rk { width: 64px; height: 64px; background: rgba(255,255,255,.1); }
 .tvorder .pill { touch-action: none; }   /* a drag here reorders instead of scrolling the card */
 .tvorder .pill.dragging { position: relative; z-index: 5; box-shadow: 0 10px 24px rgba(0,0,0,.4); opacity: .95; }
 .tvorder .pill.droptarget { box-shadow: 0 0 0 2px rgba(255,255,255,.7); }

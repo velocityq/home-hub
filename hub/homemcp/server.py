@@ -345,6 +345,17 @@ async def tv_play_title(
                       done=f"Done. Asked the TV to play \"{title}\".")
 
 
+@tool("TV remote button")
+async def tv_remote(
+    tv: Annotated[str, arg(TV_HELP, enum=C.TVS)],
+    key: Annotated[str, arg("The button: arrows (up, down, left, right), ok, back, home (the couch-tv home "
+                            "screen), play_pause, rewind or fast_forward.", enum=C.TV_KEYS)],
+) -> CallToolResult:
+    """Press one button of a TV's remote, as if on the remote itself. The TV must be on."""
+    return await _act("tv.key", {"tv": tv, "key": key}, lambda s: summary.tv_summary(s, tv),
+                      done=f"Done. Pressed {key.replace('_', '/')} on the TV.")
+
+
 @tool("Frame TV Art mode")
 async def frame_art_mode(
     on: Annotated[bool, arg("true shows art on The Frame, false turns Art mode off.")],

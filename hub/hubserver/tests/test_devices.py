@@ -375,6 +375,30 @@ async def test_only_this_houses_tvs(hub):
     assert s == 200
 
 
+async def test_tv_remote_key(hub):
+    s, b = await act(hub, "tv.key", {"tv": "living-room", "key": "ok"})
+    assert s == 200
+    assert ("/api/key", {"tv": "living-room", "key": "ok"}) in hub.bridge.app["log"]
+    s, b = await act(hub, "tv.key", {"tv": "bedroom", "key": "up"})
+    assert s == 409 and b["error"] == "The Bedroom TV is off. Turn it on first."
+    s, b = await act(hub, "tv.key", {"tv": "living-room", "key": "power"})   # not a remote button tv.key presses
+    assert s == 400
+
+
+async def test_tv_volume_does_not_jump_back_while_the_tv_still_reports_the_old_level():
+    t = Tvs({"bridge_url": "http://127.0.0.1:5400", "tv_names": {}})
+    now = lambda level: {"power": "on", "tv_connected": True, "volume": {"level": level, "known": True, "muted": False}}  # noqa: E731
+    t._set_now("bedroom", now(10))
+    t._hint_volume("bedroom", 10, 1)                 # one press up: the bridge still says 10 for a moment
+    assert t._row("bedroom")["volume"] == 11
+    t._hint_volume("bedroom", 11, 1)                 # a second press before the TV has reported anything
+    assert t._row("bedroom")["volume"] == 12
+    t._set_now("bedroom", now(10))                   # the stale reading again: still the expected level
+    assert t._row("bedroom")["volume"] == 12
+    t._set_now("bedroom", now(13))                   # the TV's own report always wins
+    assert t._row("bedroom")["volume"] == 13
+
+
 def test_bridge_key_sent_as_couch_tv_reads_it():
     t = Tvs({"bridge_url": "http://127.0.0.1:5400", "bridge_key": "bk-123", "tv_names": {}})
     assert t._headers() == {"X-Bridge-Key": "bk-123", "X-API-Key": "bk-123"}

@@ -19,6 +19,8 @@ TEMP_MIN, TEMP_MAX = 16, 30
 ZONES = ["living", "media", "rumpus", "master-bed", "bed-2", "bed-3", "bed-4"]
 SPEAKERS = ["lounge-room", "theatre", "outside"]
 TVS = ["living-room", "bedroom", "frame"]
+# The remote buttons tv.key can press. "home" is couch-tv's own home screen on that TV.
+TV_KEYS = ["up", "down", "left", "right", "ok", "back", "home", "play_pause", "rewind", "fast_forward"]
 
 
 class ContractError(ValueError):
@@ -130,6 +132,8 @@ ACTIONS: dict[str, tuple[str, dict, set]] = {
                   {"tv": lambda v: _choice(v, "tv", TVS), "app": lambda v: _text(v, "app", 60)}, {"tv", "app"}),
     "tv.play": ("Find a show or film by its title and play it on a TV.",
                 {"tv": lambda v: _choice(v, "tv", TVS), "title": lambda v: _text(v, "title", 120)}, {"tv", "title"}),
+    "tv.key": ("Press one remote button on a TV: " + ", ".join(TV_KEYS) + ".",
+               {"tv": lambda v: _choice(v, "tv", TVS), "key": lambda v: _choice(v, "key", TV_KEYS)}, {"tv", "key"}),
     "tv.art_mode": ("Turn Art mode on or off on the Frame TV.",
                     {"tv": lambda v: _choice(v, "tv", ["frame"]), "on": lambda v: _bool(v, "on")}, {"tv", "on"}),
 }

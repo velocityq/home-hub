@@ -43,7 +43,10 @@ class Tvs:
         self.now = {}            # id -> /api/now payload
         self.apps = {}           # id -> [app rows]
         self.apps_at = 0.0
-        self.ok = False          # the bridge answered the last read
+        # After a volume press a TV can go on reporting the old level for a moment (a Samsung is read about
+        # half a second later). Until it reports a new one, the level it should now have is shown instead.
+        self._vol_hint = {}      # id -> (level before the press, level expected, good until)
+        self.ok = False         # the bridge answered the last read
         self.ok_at = 0.0
         self._tasks = []
 
@@ -126,9 +129,27 @@ class Tvs:
         pl = body.get("playing")
         if isinstance(pl, dict):    # the position moves every few seconds; it is not part of the hub state
             body["playing"] = {k: pl.get(k) for k in ("title", "state")}
+        hint = self._vol_hint.get(tv)
+        vol = body.get("volume") or {}
+        if hint and vol.get("known") and vol.get("level") != hint[0]:
+            self._vol_hint.pop(tv, None)        # the TV has reported its new level: that one counts
         if body != self.now.get(tv):
             self.now[tv] = body
             self.on_change()
+
+    def _hint_volume(self, tv, shown, delta):
+        """shown: the level the wall had before this press (it may itself be a hint from the press before)."""
+        reported = ((self.now.get(tv) or {}).get("volume") or {}).get("level")
+        if shown is None or reported is None:
+            return
+        self._vol_hint[tv] = (reported, max(0, min(100, shown + delta)), time.time() + 4)
+
+        def expire():
+            h = self._vol_hint.get(tv)
+            if h and h[2] <= time.time():
+                self._vol_hint.pop(tv, None)
+                self.on_change()
+        asyncio.get_running_loop().call_later(4.1, expire)
 
     async def read_apps(self):
         for tv in self.present:
@@ -201,9 +222,13 @@ class Tvs:
         vol = n.get("volume") or {}
         app = n.get("app") or {}
         art = t.get("art_mode") if kind == "samsung" else None
+        level = vol.get("level") if on and vol.get("known") else None
+        hint = self._vol_hint.get(tv)
+        if hint and level is not None and hint[2] > time.time() and level == hint[0]:
+            level = hint[1]
         return {"id": tv, "name": self.names.get(tv, tv), "kind": kind, "power": "on" if on else "off",
                 "app": (app.get("name") or None) if on else None,
-                "volume": vol.get("level") if on and vol.get("known") else None,
+                "volume": level,
                 "muted": bool(vol.get("muted")) if on and vol else None,
                 "art_mode": art if kind == "samsung" else None,
                 "waking": bool(n.get("waking"))}
@@ -275,10 +300,13 @@ class Tvs:
                                                           if a["on"] else None))
         elif action == "tv.volume":
             self._need_on(tv)
+            if a["delta"] == 0:
+                return
+            before = self._row(tv)["volume"]
             st, body = await self._post("/api/volume", {"tv": tv, "action": "up" if a["delta"] > 0 else "down",
                                                          "steps": abs(a["delta"])})
-            if a["delta"] != 0:
-                await self._check(st, body, tv)
+            await self._check(st, body, tv)
+            self._hint_volume(tv, before, a["delta"])
         elif action == "tv.mute":
             self._need_on(tv)
             cur = self._row(tv)["muted"]
@@ -303,6 +331,11 @@ class Tvs:
             if st == 404:
                 raise Conflict(f"Couldn't find {a['title']} to play.")
             await self._check(st, body, tv)
+        elif action == "tv.key":
+            self._need_on(tv)
+            st, body = await self._post("/api/key", {"tv": tv, "key": a["key"]})
+            await self._check(st, body, tv)
+            return                    # a key press changes nothing in the state worth reading at once
         elif action == "tv.art_mode":
             self._need(tv)
             row = self._row(tv)

@@ -31,6 +31,7 @@ TV that is off or Spotify not linked), and a device that isn't answering (503).
 | `tv_mute` | `tv.mute` | Mutes or unmutes a TV |
 | `tv_open_app` | `tv.launch` | Opens an app by name |
 | `tv_play_title` | `tv.play` | Finds a show or film and plays it |
+| `tv_remote` | `tv.key` | Presses one remote button: arrows, OK, Back, Home, rewind, play/pause, fast forward |
 | `frame_art_mode` | `tv.art_mode` | Turns Art mode on or off on The Frame |
 
 ## Settings (environment variables)

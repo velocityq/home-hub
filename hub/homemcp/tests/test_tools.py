@@ -14,7 +14,7 @@ pytestmark = pytest.mark.anyio
 EXPECTED_TOOLS = {
     "house_status", "aircon_power", "aircon_set_temperature", "aircon_nudge", "aircon_mode", "aircon_fan",
     "aircon_room", "aircon_all_rooms", "music_control", "music_choose_speakers", "music_search_play", "music_start",
-    "speaker_volume", "tv_power", "tv_volume", "tv_mute", "tv_open_app", "tv_play_title", "frame_art_mode",
+    "speaker_volume", "tv_power", "tv_volume", "tv_mute", "tv_open_app", "tv_play_title", "tv_remote", "frame_art_mode",
 }
 
 # tool, tool arguments, the action the hub should log, the args the hub should log, words in the answer
@@ -47,6 +47,7 @@ CALLS = [
      "ABC iview"),
     ("tv_play_title", {"tv": "living-room", "title": "Bluey"}, "tv.play", {"tv": "living-room", "title": "Bluey"},
      "Bluey"),
+    ("tv_remote", {"tv": "living-room", "key": "ok"}, "tv.key", {"tv": "living-room", "key": "ok"}, "Pressed ok"),
     ("frame_art_mode", {"on": False}, "tv.art_mode", {"tv": "frame", "on": False}, "Art mode off"),
 ]
 

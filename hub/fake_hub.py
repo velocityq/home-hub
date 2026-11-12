@@ -156,6 +156,8 @@ class Fake:
                     t["app"] = "Netflix"
                 elif action == "tv.art_mode":
                     t["art_mode"] = a["on"]
+                elif action == "tv.key" and a["key"] == "home":
+                    t["app"] = "Home"
 
 
 class DeviceDown(Exception):

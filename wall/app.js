@@ -28,6 +28,9 @@ const I = {
   chev: '<path d="M9 5l7 7-7 7"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  remote: '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13.5h4M10 16.5h4"/>',
+  back: '<path d="M9 6l-5 5 5 5"/><path d="M4 11h11a5 5 0 0 1 0 10h-3"/>',
+  playpause: '<path d="M3 5l9 7-9 7z"/><path d="M15 5v14M20 5v14"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l4 6M21 9l-4 6"/>',
   gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/><circle cx="12" cy="12" r="7"/>',
@@ -583,6 +586,8 @@ const TVL = (() => { try { const v = JSON.parse(localStorage.getItem("hub.tvapps
 let tvEdit = null;                          // the TV whose list is being changed (the + button)
 function saveTvl() { try { localStorage.setItem("hub.tvapps", JSON.stringify(TVL)); } catch (e) { /* private mode */ } }
 function tvShown(tv, all) { const l = TVL[tv]; return Array.isArray(l) ? l.filter((a) => all.includes(a)) : all.slice(); }
+// The list to change: the saved one as it is (a service the hub has not listed yet must not drop out of it).
+function tvListFor(tv) { const l = TVL[tv]; return Array.isArray(l) ? l.slice() : ((TV() || {}).apps || []).slice(); }
 const tvPill = (a, tv, doName, sel) => `<button class="pill tvapp ${sel ? "sel" : ""}" data-do="${doName}" data-tv="${esc(tv)}" data-arg="${esc(a)}" aria-label="${esc(a)}" title="${esc(a)}">${tvAppMark(a)}</button>`;
 function tvEditBox(t, all) {
   const shown = tvShown(t.id, all), rest = all.filter((a) => !shown.includes(a));
@@ -594,6 +599,18 @@ function tvEditBox(t, all) {
       <div class="row" style="margin-top:4px"><button class="pill sel" data-do="tvEdit" data-tv="${esc(t.id)}" style="height:48px;padding:0 24px">Done</button></div>
     </div>`;
 }
+// The remote (the remote button on a TV card): arrows and OK, Back, Home, rewind, play/pause, fast forward.
+let tvRemote = null;
+function tvRemoteBox(t) {
+  const k = (key, label, inner, cls) => `<button class="rk ${cls || ""}" data-do="tvKey" data-tv="${esc(t.id)}" data-arg="${key}" aria-label="${label}">${inner}</button>`;
+  return `<div class="remote">
+      <div class="dpad">
+        ${k("up", "Up", svg("chev"), "up")}${k("left", "Left", svg("chev"), "left")}${k("ok", "OK", "OK", "ok")}${k("right", "Right", svg("chev"), "right")}${k("down", "Down", svg("chev"), "down")}
+      </div>
+      <div class="row rrow">${k("back", "Back", svg("back"))}${k("home", "Home", svg("room"))}</div>
+      <div class="row rrow">${k("rewind", "Rewind", svg("prev"))}${k("play_pause", "Play or pause", svg("playpause"))}${k("fast_forward", "Fast forward", svg("next"))}</div>
+    </div>`;
+}
 function sheetTvs() {
   const tvs = TV();
   if (!tvs || !tvs.available) return `<div style="padding-right:76px"><h2>TVs</h2></div><div style="margin-top:30px">${down("TVs not answering")}</div>`;
@@ -603,7 +620,7 @@ function sheetTvs() {
     const on = t.power === "on";
     const scr = t.waking ? `<div class="screen waking"><span><span class="spin"></span>Waking up…</span></div>`
       : on ? `<div class="screen on">${esc(t.app || "On")}</div>` : t.art_mode ? `<div class="screen artmode">Art mode</div>` : `<div class="screen">Off</div>`;
-    const all = tvs.apps || [], editing = tvEdit === t.id;
+    const all = tvs.apps || [], editing = tvEdit === t.id, remote = tvRemote === t.id && on;
     const apps = tvShown(t.id, all).map((a) => tvPill(a, t.id, "tvApp", on && t.app === a)).join("") +
       `<button class="pill tvapp tvadd" data-do="tvEdit" data-tv="${esc(t.id)}" aria-label="Add or remove services" title="Add or remove services">${svg("plus")}</button>`;
     const art = t.art_mode != null ? `<div class="row"><div class="grow" style="font-size:17px;font-weight:600">Art mode when off</div>
@@ -612,8 +629,9 @@ function sheetTvs() {
     const dim = on ? "" : "opacity:.4;pointer-events:none";
     return `<div class="tvcard ${on ? "on" : ""}" data-tvcard="${esc(t.id)}">
       <div class="row"><div class="col grow" style="min-width:0"><div style="font-size:22px;font-weight:700" class="ellip">${esc(t.name)}</div><div class="sub" style="font-size:14px">${esc(tvKind(t))}</div></div>
+        <button class="btn round ${remote ? "white" : ""}" data-do="tvRemote" data-tv="${esc(t.id)}" aria-label="${remote ? "Close the remote" : "Remote"}" title="Remote" style="width:64px;height:64px;${on ? "" : "opacity:.4;pointer-events:none"}">${svg("remote")}</button>
         <button class="btn round ${on ? "green" : ""} ${t.waking ? "busy" : ""}" data-do="tvPower" data-tv="${esc(t.id)}" aria-label="Power" style="width:64px;height:64px">${svg("power")}</button></div>
-      ${editing ? tvEditBox(t, all) : `${scr}
+      ${remote ? tvRemoteBox(t) : editing ? tvEditBox(t, all) : `${scr}
       <div class="row" style="gap:8px 6px;flex-wrap:wrap;${dim}">${apps}</div>`}
       <div class="row" style="gap:10px;margin-top:auto;${dim}">
         <button class="btn" data-do="tvVol" data-tv="${esc(t.id)}" data-arg="-1" aria-label="Volume down">−</button>
@@ -1097,6 +1115,35 @@ function act(action, args) {
   const q = action.startsWith("aircon") ? "aircon" : action.startsWith("tv") ? "tvs" : "speakers";
   return (queues[q] = (queues[q] || Promise.resolve()).then(() => post(op)));
 }
+// TV volume: quick taps on + or - are added up and sent as one change (the number moves at once), so the
+// TV is not asked once per tap and the number does not jump about while the answers come back.
+const volTaps = {};                 // tv -> { op, timer }
+function tvVolTap(tv, d) {
+  if (S.conn !== "online" || !d) return;
+  let v = volTaps[tv];
+  if (!v) { v = volTaps[tv] = { op: { id: ++opSeq, action: "tv.volume", args: { tv, delta: 0 } } }; pending.push(v.op); }
+  v.op.args.delta = Math.max(-10, Math.min(10, v.op.args.delta + d));
+  recompute(); render();
+  clearTimeout(v.timer);
+  v.timer = setTimeout(() => {
+    delete volTaps[tv];
+    if (!v.op.args.delta || S.conn !== "online") { settle(v.op, null); return; }
+    queues.tvs = (queues.tvs || Promise.resolve()).then(() => post(v.op));
+  }, 350);
+}
+// A remote button: sent in order, and nothing on the screen is redrawn (a press changes nothing shown, and
+// redrawing under a finger loses the next tap).
+function tvKeyPress(tv, key) {
+  if (S.conn !== "online") return;
+  queues.tvs = (queues.tvs || Promise.resolve()).then(async () => {
+    try {
+      const res = await fetch(HUB + "/api/action", { method: "POST", headers: { ...auth(), "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ action: "tv.key", args: { tv, key } }) });
+      if (res.status === 401) { needKey(true); return; }
+      if (!res.ok) { let b = null; try { b = await res.json(); } catch (e) { /* not JSON */ } toast(errorText(res.status, b), 4200); }
+    } catch (e) { toast("Couldn't reach the hub. Nothing changed."); }
+  });
+}
 function settle(op, state) {
   pending = pending.filter((o) => o !== op);
   if (state) setServer(state); else recompute();
@@ -1182,16 +1229,18 @@ const DO = {
   },
   tvPower: (_, tv) => { const t = tvList(TV()).find((x) => x.id === tv); if (t) act("tv.power", { tv, on: !(t.power === "on" || t.waking) }); },
   tvApp: (app, tv) => act("tv.launch", { tv, app }),
-  tvEdit: (_, tv) => { tvEdit = tvEdit === tv ? null : tv; renderSheet(); },
-  tvAppHide: (app, tv) => { TVL[tv] = tvShown(tv, (TV() || {}).apps || []).filter((a) => a !== app); saveTvl(); renderSheet(); },
+  tvEdit: (_, tv) => { tvEdit = tvEdit === tv ? null : tv; if (tvEdit) tvRemote = null; renderSheet(); },
+  tvRemote: (_, tv) => { tvRemote = tvRemote === tv ? null : tv; if (tvRemote) tvEdit = null; renderSheet(); },
+  tvKey: (key, tv) => tvKeyPress(tv, key),
+  tvAppHide: (app, tv) => { TVL[tv] = tvListFor(tv).filter((a) => a !== app); saveTvl(); renderSheet(); },
   tvAppAdd: (app, tv) => {
-    const l = tvShown(tv, (TV() || {}).apps || []); if (!l.includes(app)) l.push(app);
+    const l = tvListFor(tv); if (!l.includes(app)) l.push(app);
     TVL[tv] = l; saveTvl(); renderSheet();
     const t = tvList(TV()).find((x) => x.id === tv);
     if (t && t.power === "on") { act("tv.launch", { tv, app }); toast(`Opening ${app} on the ${t.name} TV. Sign in there.`, 4500); }
     else toast(`${app} is on the panel. Turn the TV on and open it to sign in.`, 4500);
   },
-  tvVol: (d, tv) => act("tv.volume", { tv, delta: Number(d) }),
+  tvVol: (d, tv) => tvVolTap(tv, Number(d)),
   tvMute: (_, tv) => { const t = tvList(TV()).find((x) => x.id === tv); if (t) act("tv.mute", { tv, muted: !t.muted }); },
   frameArt: (_, tv) => { const t = tvList(TV()).find((x) => x.id === (tv || "frame")); if (t) act("tv.art_mode", { tv: t.id, on: !t.art_mode }); },
 };
@@ -1255,7 +1304,7 @@ function endTvDrag(e, cancel) {
   swallowClick = true; setTimeout(() => { swallowClick = false; }, 400);
   const tv = d.el.dataset.tv, app = d.el.dataset.arg;
   if (!cancel && d.target) {
-    const l = tvShown(tv, (TV() || {}).apps || []).filter((a) => a !== app);
+    const l = tvListFor(tv).filter((a) => a !== app);
     const i = l.indexOf(d.target.arg);
     l.splice(i + (d.target.after ? 1 : 0), 0, app);
     TVL[tv] = l; saveTvl();
