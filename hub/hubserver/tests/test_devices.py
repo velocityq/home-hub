@@ -3,6 +3,7 @@ import asyncio
 
 from hubserver import config as cfgmod
 from hubserver.aircon import Aircon
+from hubserver.tvs import Tvs
 
 from .conftest import auth, build, close, is_private, wait_for
 from .fakes import FakeAirtouch, FakeCast, airtouch_factory
@@ -363,6 +364,22 @@ async def test_bridge_key_sent(home):
         assert s == 200
     finally:
         await close(c)
+
+
+async def test_only_this_houses_tvs(hub):
+    hub.tvs.present = ["living-room", "bedroom"]       # "tvs": ["living-room", "bedroom"] in config.json
+    assert [d["id"] for d in hub.hub.state()["tvs"]["devices"]] == ["living-room", "bedroom"]
+    s, b = await act(hub, "tv.power", {"tv": "frame", "on": True})
+    assert s == 409 and b["error"] == "The Frame is not one of this house's TVs."
+    s, b = await act(hub, "tv.volume", {"tv": "living-room", "delta": 1})
+    assert s == 200
+
+
+def test_bridge_key_sent_as_couch_tv_reads_it():
+    t = Tvs({"bridge_url": "http://127.0.0.1:5400", "bridge_key": "bk-123", "tv_names": {}})
+    assert t._headers() == {"X-Bridge-Key": "bk-123", "X-API-Key": "bk-123"}
+    t = Tvs({"bridge_url": "http://127.0.0.1:5400", "tv_names": {}, "tvs": ["bedroom", "nope"]})
+    assert t._headers() == {} and t.present == ["bedroom"]
 
 
 async def test_bridge_key_missing(home):

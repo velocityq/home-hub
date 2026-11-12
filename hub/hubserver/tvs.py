@@ -2,7 +2,8 @@
 
 Live: one /api/events stream per TV (server-sent events, the same JSON as /api/now).
 Backstop: /api/tvs every 15 s (it also carries the Frame's Art Mode) and /api/now every 60 s.
-If the hub config has bridge_key, every call sends it as X-Bridge-Key.
+If the hub config has bridge_key, every call sends it as X-Bridge-Key and X-API-Key (couch-tv's pairing_key).
+"tvs" in the hub config lists the contract TVs this house has; the others are not shown or read.
 """
 from __future__ import annotations
 
@@ -32,6 +33,9 @@ class Tvs:
         self.base = cfg["bridge_url"].rstrip("/")
         self.key = cfg.get("bridge_key")
         self.names = cfg["tv_names"]
+        # The contract's TVs this house has ("tvs" in config.json, default all). Only these are shown and read.
+        want = cfg.get("tvs")
+        self.present = [t for t in C.TVS if t in want] if isinstance(want, list) and want else list(C.TVS)
         self.on_change = on_change
         self.session = session
         self._own_session = session is None
@@ -44,14 +48,16 @@ class Tvs:
         self._tasks = []
 
     def _headers(self):
-        return {"X-Bridge-Key": self.key} if self.key else {}
+        # couch-tv reads its pairing_key from X-API-Key (or Authorization: Bearer); X-Bridge-Key is kept for
+        # bridges that read that one.
+        return {"X-Bridge-Key": self.key, "X-API-Key": self.key} if self.key else {}
 
     # ---------- life ----------
     async def start(self):
         if self.session is None:
             self.session = aiohttp.ClientSession()
         self._tasks = [asyncio.create_task(self._poll(), name="tvs-poll")]
-        self._tasks += [asyncio.create_task(self._events(t), name=f"tvs-events-{t}") for t in C.TVS]
+        self._tasks += [asyncio.create_task(self._events(t), name=f"tvs-events-{t}") for t in self.present]
 
     async def stop(self):
         for t in self._tasks:
@@ -125,7 +131,7 @@ class Tvs:
             self.on_change()
 
     async def read_apps(self):
-        for tv in C.TVS:
+        for tv in self.present:
             try:
                 st, body = await self._get("/api/apps", tv=tv)
                 if st == 200:
@@ -141,7 +147,7 @@ class Tvs:
             try:
                 await self.read_all()
                 if n % 4 == 0:
-                    for tv in C.TVS:
+                    for tv in self.present:
                         await self.read_now(tv)
                 if time.time() - self.apps_at > 600:
                     await self.read_apps()
@@ -204,7 +210,7 @@ class Tvs:
 
     def app_names(self):
         seen, out = set(), []
-        for tv in C.TVS:
+        for tv in self.present:
             for a in self.apps.get(tv, []):
                 if a.get("installed") is False or (a.get("id") or "") in SKIP_APPS or not a.get("name"):
                     continue
@@ -218,10 +224,12 @@ class Tvs:
         return self.ok and bool(self.tvs)
 
     def snapshot(self):
-        return {"available": self.available, "devices": [self._row(tv) for tv in C.TVS], "apps": self.app_names()}
+        return {"available": self.available, "devices": [self._row(tv) for tv in self.present], "apps": self.app_names()}
 
     # ---------- doing ----------
     def _need(self, tv):
+        if tv not in self.present:
+            raise Conflict(f"{self.names.get(tv, tv)} is not one of this house's TVs.")
         if not self.available:
             raise DeviceDown("tvs")
         t = self.tvs.get(tv)
