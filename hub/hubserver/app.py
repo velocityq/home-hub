@@ -8,6 +8,7 @@ import re
 import socket
 import json
 import logging
+import mimetypes
 import os
 import time
 
@@ -25,6 +26,10 @@ log = logging.getLogger("hub.web")
 actions_log = logging.getLogger("hub.actions")
 
 WALL_DIR = os.path.join(os.path.dirname(HUB_DIR), "wall")
+# Python reads file types from the Windows registry, which often has no .webp. Without this the wall's
+# scene foregrounds go out as application/octet-stream, and with nosniff the browser may not draw them.
+# wall_static passes the type on itself, since aiohttp's FileResponse keeps a table of its own.
+mimetypes.add_type("image/webp", ".webp")
 AUDIO_MAX = 2 * 1024 * 1024
 ASK_LIMIT, ASK_WINDOW = 30, 600          # asks per client per 10 minutes
 AUDIO_TYPES = ("audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/wave", "audio/mp4")
@@ -443,7 +448,11 @@ def make_app(hub, keys, cfg, wall_dir=WALL_DIR, ask_factory=None, personal=None)
         p = wall_file(rel) if rel else None
         if not p:
             raise web.HTTPNotFound(text="Not found.")
-        return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
+        headers = {"Cache-Control": "no-cache"}
+        ctype = mimetypes.guess_type(p)[0]       # aiohttp's own table has no .webp on Windows either
+        if ctype:
+            headers["Content-Type"] = ctype
+        return web.FileResponse(p, headers=headers)
 
     # ---------- personal views (Face ID on the tablet sends a name, never a picture) ----------
     async def presence(request):
