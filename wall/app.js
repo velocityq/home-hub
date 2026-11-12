@@ -563,6 +563,20 @@ function sheetMusic() {
       <div class="row mplayon" data-mplayon style="gap:10px;flex-wrap:nowrap">${mPlayOn(sp)}</div>
     </div></div>`;
 }
+// A TV app's logo (tvlogos.js, drawn in the button's own colour), or its name as a wordmark when there is none.
+function tvAppMark(name) {
+  const L = (window.TV_LOGOS || {})[name];
+  if (L) {     // 26px tall, wide wordmarks capped at 88px wide
+    const [x, y, w, h] = L.box, ht = Math.min(26, 88 * h / w), wd = ht * w / h;
+    return `<svg viewBox="${x} ${y} ${w} ${h}" width="${wd.toFixed(1)}" height="${ht.toFixed(1)}" fill="currentColor" aria-hidden="true"><path d="${esc(L.d)}"/></svg>`;
+  }
+  const F = (window.TV_LOGO_FILES || {})[name];
+  if (F) {     // a logo file: its shape only, as a mask filled with the button's colour
+    const ht = Math.min(F.h || 26, 88 / F.ratio), wd = ht * F.ratio, u = `url(${esc(F.src)})`;
+    return `<span class="tvmask" aria-hidden="true" style="width:${wd.toFixed(1)}px;height:${ht.toFixed(1)}px;-webkit-mask-image:${u};mask-image:${u}"></span>`;
+  }
+  return `<span class="tvword" aria-hidden="true">${esc(name)}</span>`;
+}
 function sheetTvs() {
   const tvs = TV();
   if (!tvs || !tvs.available) return `<div style="padding-right:76px"><h2>TVs</h2></div><div style="margin-top:30px">${down("TVs not answering")}</div>`;
@@ -572,7 +586,7 @@ function sheetTvs() {
     const on = t.power === "on";
     const scr = t.waking ? `<div class="screen waking"><span><span class="spin"></span>Waking up…</span></div>`
       : on ? `<div class="screen on">${esc(t.app || "On")}</div>` : t.art_mode ? `<div class="screen artmode">Art mode</div>` : `<div class="screen">Off</div>`;
-    const apps = (tvs.apps || []).map((a) => `<button class="pill ${on && t.app === a ? "sel" : ""}" data-do="tvApp" data-tv="${esc(t.id)}" data-arg="${esc(a)}" style="height:44px;padding:0 14px;font-size:15px">${esc(a)}</button>`).join("");
+    const apps = (tvs.apps || []).map((a) => `<button class="pill tvapp ${on && t.app === a ? "sel" : ""}" data-do="tvApp" data-tv="${esc(t.id)}" data-arg="${esc(a)}" aria-label="${esc(a)}" title="${esc(a)}">${tvAppMark(a)}</button>`).join("");
     const art = t.art_mode != null ? `<div class="row"><div class="grow" style="font-size:17px;font-weight:600">Art mode when off</div>
         <button class="sw ${t.art_mode ? "on" : ""}" data-do="frameArt" data-tv="${esc(t.id)}" aria-label="Art mode"></button></div>`
       : anyArt ? '<div style="height:38px"></div>' : "";
