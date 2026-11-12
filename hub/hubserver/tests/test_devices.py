@@ -4,7 +4,7 @@ import asyncio
 from hubserver import config as cfgmod
 from hubserver.aircon import Aircon
 
-from .conftest import auth, build, close, wait_for
+from .conftest import auth, build, close, is_private, wait_for
 from .fakes import FakeAirtouch, FakeCast, airtouch_factory
 
 
@@ -278,7 +278,7 @@ async def test_spotify_token_refresh(hub_linked):
     assert tok["access_token"] != "access-0" and tok["refresh_token"] == "refresh-1"
     import os
     import stat
-    assert stat.S_IMODE(os.stat(cfgmod.path("spotify-token.json")).st_mode) == 0o600
+    assert is_private(cfgmod.path("spotify-token.json"))
 
 
 async def test_spotify_pkce_login(home):

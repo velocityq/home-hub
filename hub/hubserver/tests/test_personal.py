@@ -8,7 +8,7 @@ from hubserver import config as cfgmod
 from hubserver import personal as P
 from hubserver.app import make_app
 
-from .conftest import auth, build, close
+from .conftest import auth, build, close, is_private
 
 PEOPLE = ["Sam", "Alex"]
 TZ = dt.timezone(dt.timedelta(hours=11))
@@ -90,7 +90,7 @@ async def test_ics_calendar_repeats_and_privacy(home):
     P.save_calendar_address("Alex", "Family", "webcal://example.com/private-abc/basic.ics")
     saved = cfgmod.read_json(cfgmod.path("personal.json"))
     assert saved["Alex"][0]["ics"].startswith("https://example.com/")
-    assert stat.S_IMODE(os.stat(cfgmod.path("personal.json")).st_mode) == 0o600
+    assert is_private(cfgmod.path("personal.json"))
     got = []
 
     async def fetch(url):

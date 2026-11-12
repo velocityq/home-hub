@@ -70,6 +70,36 @@ The first start makes `~/.home-hub/keys.json` (mode 600) with keys for `wall`, `
 
 `AGENTS.md` walks an AI agent through the same set up, one question at a time.
 
+### Windows
+
+The hub also runs on a Windows 10 or 11 PC that stays on. In PowerShell, from the repo folder:
+
+```powershell
+py -3 -m venv hub\.venv
+hub\.venv\Scripts\python.exe -m pip install -r hub\hubserver\requirements.txt -r hub\homemcp\requirements.txt
+mkdir $env:USERPROFILE\.home-hub
+copy config.example.json $env:USERPROFILE\.home-hub\config.json      # then edit it, as above
+powershell -ExecutionPolicy Bypass -File hub\deploy\windows\install.ps1
+```
+
+- `install.ps1` adds a Task Scheduler task, `home-hub`, that starts the hub hidden when you log on and
+  restarts it if it fails, then checks it answers. It needs no admin rights. `uninstall.ps1` removes it.
+- Stop and start it: `Stop-ScheduledTask home-hub`, `Start-ScheduledTask home-hub`. Or run it in a window
+  instead: `cd hub; .\.venv\Scripts\python.exe -m hubserver` (Ctrl+C stops it).
+- `%USERPROFILE%\.home-hub` and `keys.json` are limited to your Windows user with an ACL (`icacls`) in place
+  of mode 700 and 600.
+- The tablet reaches the hub on port 8790, so Windows Firewall needs one inbound rule (as admin), only for the
+  home network. Set the Wi-Fi to **Private** first (Settings, Network & internet, Wi-Fi, the network's
+  properties), then:
+  `New-NetFirewallRule -DisplayName "Home hub (8790)" -Direction Inbound -Protocol TCP -LocalPort 8790 -Profile Private -RemoteAddress LocalSubnet -Action Allow`
+- Give the PC a fixed address (a DHCP reservation in the router) so the tablet keeps finding it.
+- Pair the tablet: `cd hub; .\.venv\Scripts\python.exe -m hubserver pair`.
+- Voice is optional: put `ffmpeg.exe` and whisper.cpp's `whisper-cli.exe` on PATH (or set `ffmpeg_bin` and
+  `whisper_bin` under `ask` in `config.json`) and the model in `%USERPROFILE%\.home-hub\models`. Without them
+  the hub runs and the wall says speech to text is not set up.
+- Tests run the same way with `hub\.venv\Scripts\python.exe -m pytest ...`; the speech tests skip without
+  `say`, ffmpeg and whisper.
+
 ### The tablet download
 
 `home-hub-tablet.apk` on the [latest release](https://github.com/Seagey/home-hub/releases/latest) is built from this

@@ -106,7 +106,8 @@ def read_snapshot(path, name, now, until):
     if isinstance(fetched, str):
         f_at, _ = _parse_start(fetched)
         if f_at and (now - f_at).total_seconds() > 6 * 3600:
-            stale = "last updated " + f_at.astimezone(_local_tz()).strftime("%-d %b %-I:%M %p")
+            t = f_at.astimezone(_local_tz())       # "%-d" / "%-I" do not exist on Windows
+            stale = f"last updated {t.day} {t:%b} {t.hour % 12 or 12}:{t:%M %p}"
     return out, stale
 
 

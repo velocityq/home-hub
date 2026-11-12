@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import time
 from datetime import datetime
@@ -126,7 +127,9 @@ def child_env():
     env = {k: v for k, v in os.environ.items()
            if k not in drop and not (k.startswith("CLAUDE_CODE_") and k not in keep_cc)}
     env.setdefault("HOME", os.path.expanduser("~"))
-    env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + env.get("PATH", "")
+    if sys.platform == "darwin":                # launchd starts the hub with a bare PATH
+        env["PATH"] = os.pathsep.join(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+                                       env.get("PATH", "")])
     return env
 
 

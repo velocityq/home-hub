@@ -6,7 +6,7 @@ import stat
 
 from hubserver import config as cfgmod
 
-from .conftest import MCP_KEY, WALL_KEY, auth, build, close, wait_for
+from .conftest import MCP_KEY, WALL_KEY, auth, build, close, is_private, wait_for
 
 
 async def test_health_needs_no_key(hub):
@@ -117,8 +117,8 @@ async def test_keys_file_made_with_mode_600(tmp_path, monkeypatch):
     monkeypatch.delenv("HUB_KEYS_FILE", raising=False)
     k = cfgmod.Keys()
     p = tmp_path / "h" / "keys.json"
-    assert stat.S_IMODE(os.stat(p).st_mode) == 0o600
-    assert stat.S_IMODE(os.stat(tmp_path / "h").st_mode) == 0o700
+    assert is_private(p, 0o600)
+    assert is_private(tmp_path / "h", 0o700)
     data = json.loads(p.read_text())
     assert sorted(data["clients"]) == ["couch-tv", "mcp", "wall"]
     assert len({*data["clients"].values()}) == 3
@@ -176,7 +176,7 @@ async def test_pair_cli_prints_code(home, capsys):
     import re
     code = re.search(r"Pairing code: (\d{6})", out).group(1)
     assert cfgmod.check_pair_code(code)
-    assert stat.S_IMODE(os.stat(home / "keys.json").st_mode) in (0o600, 0o644)  # (test file)
+    assert is_private(home / "keys.json", 0o600) or is_private(home / "keys.json", 0o644)  # (test file)
 
 
 async def test_events_socket(hub):

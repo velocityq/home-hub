@@ -35,9 +35,9 @@ Both calls return the `/api/ask` answer from CONTRACT.md:
 
 | Key | Default | What |
 |---|---|---|
-| `whisper_bin` | `/opt/homebrew/bin/whisper-cli` | whisper.cpp |
+| `whisper_bin` | `whisper-cli` on PATH, else `/opt/homebrew/bin/whisper-cli` | whisper.cpp |
 | `whisper_model` | `~/.home-hub/models/ggml-small.en.bin` | the model |
-| `ffmpeg_bin` | `/opt/homebrew/bin/ffmpeg` | converts any input to 16 kHz mono wav |
+| `ffmpeg_bin` | `ffmpeg` on PATH, else `/opt/homebrew/bin/ffmpeg` | converts any input to 16 kHz mono wav |
 | `claude_bin` | `claude` on PATH, else `/opt/homebrew/bin/claude` | the Claude Code CLI |
 | `claude_model` | `haiku` | named explicitly, always |
 | `claude_timeout` | `25` | seconds |
