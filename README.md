@@ -38,6 +38,8 @@ the ids there and in `config.json` to fit yours.
   a missing device shows as "not answering" and the rest works.
 - For the wall: an Android tablet on Android 11 or newer, on the same Wi-Fi as the Mac. The app is a
   download (below). Building it yourself needs the Android SDK (build-tools 34, platform 34) and JDK 21. No Gradle.
+  It can share a tablet with the AirTouch app (an AirTouch 5 console's own Android tablet, for example): the
+  AirTouch app and its aircon service keep running, and the wall has a button that opens it.
 
 ## Set up
 
