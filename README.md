@@ -1,14 +1,15 @@
 # Home hub
 
 A small hub that runs a house from one always-on Mac: a ducted aircon on an AirTouch 5 console, Google
-Cast ceiling speakers with Spotify, and TVs through the [couch-tv](https://github.com/Seagey/couch-tv)
-bridge. A wall tablet shows it full screen, you can talk to it, and Claude can run it through a short
+Cast ceiling speakers with Spotify, TVs through the [couch-tv](https://github.com/Seagey/couch-tv)
+bridge, and WiZ lights. A wall tablet shows it full screen, you can talk to it, and Claude can run it through a short
 list of safe actions.
 
 ```
 Wall tablet ─┐                           ┌─ AirTouch 5 console (port 9005)   aircon and room vents
 Phone        ┼─> hub on the Mac :8790 ───┼─ Cast and Spotify Connect          ceiling speakers
-Claude tools ┘   (one list of actions)   └─ couch-tv bridge (127.0.0.1:5400)  TVs
+Claude tools ┘   (one list of actions)   ├─ couch-tv bridge (127.0.0.1:5400)  TVs
+                                         └─ WiZ bulbs (UDP 38899)             lights
 ```
 
 No cloud service of its own, no Home Assistant, nothing open to the internet. It was built for one
@@ -34,8 +35,18 @@ the ids there and in `config.json` to fit yours.
   for voice (`brew install ffmpeg whisper-cpp`), plus the `ggml-small.en.bin` speech model.
 - Optional: the Claude Code CLI signed in to a Claude plan, for questions the simple rules do not cover.
   The hub strips any `ANTHROPIC_API_KEY` before it runs Claude, so it never bills an API key.
-- The devices you have: an AirTouch 5 console, Cast speakers, couch-tv for TVs. Each part is optional:
-  a missing device shows as "not answering" and the rest works.
+- The devices you have: an AirTouch 5 console, Cast speakers, couch-tv for TVs, WiZ lights. Each part is
+  optional: a missing device shows as "not answering" and the rest works.
+- WiZ lights are listed in `config.json` (`"lights": [{"id": "lamp", "name": "Lamp", "mac": "...", "ip": "..."}]`)
+  and spoken to directly on the home network, with no WiZ account in the hub. A light can be a room of several
+  bulbs (`"bulbs": [{"mac": "...", "ip": "..."}, ...]` in place of one `mac` and `ip`): it shows as one light
+  and every change goes to all of them. Each light can have up to 8 schedules (on or off at a time on chosen days,
+  at once or fading over up to an hour), set at the bottom of its card in the Lighting panel. The hub runs them by
+  this computer's clock and keeps them in `~/.home-hub/light-schedules.json`, so they only happen while it runs. On the wall, Lighting takes the
+  aircon's place when the house has lights and no aircon answering. Bulbs on firmware 1.34 or newer only take
+  signed changes: either choose "Allow all controls" under Settings, Security, Allow local communication in the
+  WiZ app, or put the home's signing key (the `udp_signing_key` in the WiZ app's local integration export) in
+  `"lights_key"`.
 - For the wall: an Android tablet on Android 11 or newer, on the same Wi-Fi as the Mac. The app is a
   download (below). Building it yourself needs the Android SDK (build-tools 34, platform 34) and JDK 21. No Gradle.
   It can share a tablet with the AirTouch app (an AirTouch 5 console's own Android tablet, for example): the

@@ -356,6 +356,78 @@ async def tv_remote(
                       done=f"Done. Pressed {key.replace('_', '/')} on the TV.")
 
 
+LIGHT_HELP = "The light's id (house_status lists the lights), or all for every light."
+
+
+@tool("Light on or off")
+async def light_power(
+    light: Annotated[str, arg(LIGHT_HELP, maxLength=40)],
+    on: Annotated[bool, arg("true turns the light on, false turns it off.")],
+) -> CallToolResult:
+    """Turn one light, or all the lights, on or off."""
+    return await _act("lights.power", {"light": light, "on": on}, lambda s: summary.lights_summary(s, light))
+
+
+@tool("Light brightness")
+async def light_brightness(
+    light: Annotated[str, arg(LIGHT_HELP, maxLength=40)],
+    value: Annotated[int, arg("Brightness in percent, 10 to 100.", minimum=C.LIGHT_BRIGHT_MIN, maximum=C.LIGHT_BRIGHT_MAX)],
+) -> CallToolResult:
+    """Set how bright a light is, 10 to 100 percent. This also turns the light on."""
+    return await _act("lights.brightness", {"light": light, "value": value}, lambda s: summary.lights_summary(s, light))
+
+
+@tool("Light white tone")
+async def light_white(
+    light: Annotated[str, arg(LIGHT_HELP, maxLength=40)],
+    kelvin: Annotated[int, arg("White tone in kelvin: 2200 is warm candle light, 2700 warm white, 4000 neutral, "
+                               "6500 daylight.", minimum=C.LIGHT_TEMP_MIN, maximum=C.LIGHT_TEMP_MAX)],
+) -> CallToolResult:
+    """Set a light to white, anywhere from warm to daylight. This also turns the light on."""
+    return await _act("lights.white", {"light": light, "kelvin": kelvin}, lambda s: summary.lights_summary(s, light))
+
+
+@tool("Light colour")
+async def light_color(
+    light: Annotated[str, arg(LIGHT_HELP, maxLength=40)],
+    color: Annotated[str, arg("The colour as #rrggbb, for example #ff0000 red, #00ff00 green, #0000ff blue, "
+                              "#ff8800 orange, #ff00ff pink.", maxLength=7)],
+) -> CallToolResult:
+    """Set a light to a colour. This also turns the light on."""
+    return await _act("lights.color", {"light": light, "color": color}, lambda s: summary.lights_summary(s, light))
+
+
+@tool("Light schedule")
+async def light_schedule(
+    light: Annotated[str, arg("The light's id (house_status lists the lights and their schedules).", maxLength=40)],
+    time: Annotated[str, arg("When it starts, HH:MM in 24 hour time, for example 06:40.", maxLength=5)],
+    days: Annotated[list[str], arg("The days it runs.", items={"type": "string", "enum": C.DAYS}, minItems=1)],
+    do: Annotated[str, arg("on or off.", enum=C.SCHEDULE_DO)],
+    fade: Annotated[int, arg(f"Minutes to fade over, 0 to {C.FADE_MAX}. 0 is at once.", minimum=0, maximum=C.FADE_MAX)] = 0,
+    brightness: Annotated[int | None, arg("For on: the brightness to end at, 10 to 100.",
+                                          minimum=C.LIGHT_BRIGHT_MIN, maximum=C.LIGHT_BRIGHT_MAX)] = None,
+    schedule: Annotated[str | None, arg("To change an existing schedule: its id. Leave out to add a new one.",
+                                        maxLength=12)] = None,
+) -> CallToolResult:
+    """Add or change a daily schedule that turns a light on or off at a time, optionally fading over some minutes."""
+    args = {"light": light, "time": time, "days": days, "do": do, "fade": fade}
+    if brightness is not None:
+        args["brightness"] = brightness
+    if schedule:
+        args["schedule"] = schedule
+    return await _act("lights.schedule", args, lambda s: summary.lights_summary(s, light), done="Done. Schedule saved.")
+
+
+@tool("Remove a light schedule")
+async def light_unschedule(
+    light: Annotated[str, arg("The light's id.", maxLength=40)],
+    schedule: Annotated[str, arg("The schedule's id (house_status lists them).", maxLength=12)],
+) -> CallToolResult:
+    """Remove one of a light's schedules."""
+    return await _act("lights.unschedule", {"light": light, "schedule": schedule},
+                      lambda s: summary.lights_summary(s, light), done="Done. Schedule removed.")
+
+
 @tool("Frame TV Art mode")
 async def frame_art_mode(
     on: Annotated[bool, arg("true shows art on The Frame, false turns Art mode off.")],

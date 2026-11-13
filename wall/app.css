@@ -68,6 +68,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .btn.cool, .card .btn.cool, .light .btn.cool { background: var(--cool); color: #fff; }
 .btn.heat, .card .btn.heat, .light .btn.heat { background: var(--heat); color: #fff; }
 .btn.green, .card .btn.green, .light .btn.green { background: var(--green); color: #fff; }
+.btn.warm, .card .btn.warm, .light .btn.warm { background: var(--warm); color: #fff; }
 .pill { height: 48px; padding: 0 18px; border-radius: 24px; display: inline-flex; align-items: center; gap: 8px;
         font-size: 17px; font-weight: 600; background: rgba(255,255,255,.18); transition: background .2s, color .2s; }
 .light .pill, .card.on .pill { background: rgba(0,0,0,.07); }
@@ -312,6 +313,24 @@ html.lighter .keypanel .box { box-shadow: none; background: rgb(28, 33, 45); }
 .splogo { display: block; width: auto; }
 .pill.tvapp { height: 52px; min-width: 64px; padding: 0 16px; justify-content: center; }
 .pill.tvapp svg { display: block; }
+/* lighting */
+.lidot { width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1.5px solid rgba(255,255,255,.55); }
+.card.on .lidot { border-color: rgba(0,0,0,.25); }
+.lidot.big { width: 40px; height: 40px; border-width: 2px; box-shadow: 0 0 18px rgba(255,255,255,.12); }
+.swatch { width: 48px; height: 48px; border-radius: 50%; flex: none; border: 2px solid rgba(255,255,255,.35); position: relative; }
+.swatch::after { content: ""; position: absolute; left: -4px; right: -4px; top: -4px; bottom: -4px; }
+.swatch.sel { box-shadow: 0 0 0 3px #fff; }
+input[type=range].kelvin::-webkit-slider-runnable-track { background: linear-gradient(to right, rgb(255,170,84), #fff3e0 45%, rgb(222,236,255)); }
+[data-light] .label { font-size: 13px; }
+.sched { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.14); }
+.sched .pill svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.srow { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 12px 6px 16px; border-radius: 18px; background: rgba(255,255,255,.08); }
+.srow.paused { opacity: .55; }
+.daychip { width: 44px; height: 44px; border-radius: 50%; font-size: 16px; font-weight: 700; background: rgba(255,255,255,.14); }
+.daychip.sel { background: #fff; color: var(--ink); }
+.stime { height: 52px; padding: 0 14px; border-radius: 14px; border: 0; font: inherit; font-size: 24px; font-weight: 600;
+  background: rgba(255,255,255,.16); color: #fff; color-scheme: dark; }
+
 /* the TV remote */
 .remote { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 4px 0; }
 .dpad { position: relative; width: 236px; height: 236px; border-radius: 50%; background: rgba(255,255,255,.1);

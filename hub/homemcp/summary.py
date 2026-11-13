@@ -188,6 +188,43 @@ def tv_summary(state: dict, tv_id: str) -> str:
     return (tv_line(t) + ".") if t else f"TV {tv_id}: not in the hub's answer."
 
 
+# ---- lights ----
+
+def schedule_text(s: dict) -> str:
+    what = f"on to {s.get('brightness')}%" if s.get("do") == "on" else "off"
+    fade = f", fading over {s['fade']} min" if s.get("fade") else ""
+    return (f"[{s.get('id')}] {s.get('time')} {','.join(s.get('days') or [])}: {what}{fade}"
+            + ("" if s.get("enabled", True) else " (paused)"))
+
+
+def light_line(d: dict) -> str:
+    if not d.get("available"):
+        line = f"{_name(d)}: not answering"
+    elif not d.get("on"):
+        line = f"{_name(d)}: off"
+    else:
+        look = f"white {d['kelvin']}K" if d.get("kelvin") else f"colour {d['color']}" if d.get("color") else "on"
+        line = f"{_name(d)}: on, {d.get('brightness')}%, {look}"
+    if d.get("fading"):
+        line += ", a scheduled fade is running"
+    if d.get("schedules"):
+        line += "; schedules: " + "; ".join(schedule_text(s) for s in d["schedules"])
+    return line
+
+
+def lights_block(state: dict) -> str:
+    devs = (state.get("lights") or {}).get("devices") or []
+    if not devs:
+        return "Lights: none set up."
+    return "\n".join(["Lights:"] + [f"  - {light_line(d)}" for d in devs])
+
+
+def lights_summary(state: dict, light_id: str) -> str:
+    devs = (state.get("lights") or {}).get("devices") or []
+    rows = [d for d in devs if light_id in (d.get("id"), "all")]
+    return "; ".join(light_line(d) for d in rows) + "." if rows else f"Light {light_id}: not in the hub's answer."
+
+
 # ---- everything ----
 
 def house_summary(state: dict) -> str:
@@ -200,6 +237,8 @@ def house_summary(state: dict) -> str:
         spotify_line(state),
         "",
         tvs_block(state),
+        "",
+        lights_block(state),
     ]
     if state.get("updated"):
         parts += ["", f"(State as of {state['updated']}.)"]

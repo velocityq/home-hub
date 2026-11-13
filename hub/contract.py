@@ -23,6 +23,18 @@ TVS = ["living-room", "bedroom", "frame"]
 TV_KEYS = ["up", "down", "left", "right", "ok", "back", "home", "play_pause", "rewind", "fast_forward"]
 
 
+# Lights are named in the hub's config.json ("lights"), so their ids are not fixed here: any id of this shape,
+# or "all" for every light. The hub answers 409 for an id the house does not have.
+LIGHT_ALL = "all"
+LIGHT_BRIGHT_MIN, LIGHT_BRIGHT_MAX = 10, 100          # percent
+LIGHT_TEMP_MIN, LIGHT_TEMP_MAX = 2200, 6500           # kelvin: warm white to daylight
+# A light's schedules: at a time on some days, turn it on or off, at once or fading over some minutes.
+DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+SCHEDULE_DO = ["on", "off"]
+FADE_MAX = 60                                         # minutes
+SCHEDULES_MAX = 8                                     # per light
+
+
 class ContractError(ValueError):
     """A request that breaks the contract. The message is plain words, safe to show a person."""
 
@@ -67,6 +79,43 @@ def _spotify_uri(v, name):
     v = _text(v, name, 80)
     if not re.fullmatch(r"spotify:(track|album|artist|playlist):[A-Za-z0-9]{10,40}|spotify:user:[A-Za-z0-9._-]{1,40}:collection", v):
         raise ContractError(f"{name} is not a Spotify link")
+    return v
+
+
+def _light(v, name="light"):
+    v = _text(v, name, 40)
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", v):
+        raise ContractError(f"{name} must be a light's id, or all")
+    return v
+
+
+def _color(v, name="color"):
+    v = _text(v, name, 7).lower()
+    if not re.fullmatch(r"#[0-9a-f]{6}", v):
+        raise ContractError(f"{name} must be a colour like #ff8800")
+    return v
+
+
+def _clock(v, name="time"):
+    v = _text(v, name, 5)
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
+    if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
+        raise ContractError(f"{name} must be a time like 06:40 (24 hour)")
+    return f"{int(m.group(1)):02d}:{m.group(2)}"
+
+
+def _days(v, name="days"):
+    if not isinstance(v, list) or not v:
+        raise ContractError(f"{name} must be a list of one or more days: {', '.join(DAYS)}")
+    for d in v:
+        _choice(d, name, DAYS)
+    return [d for d in DAYS if d in v]                # in week order, each once
+
+
+def _schedule_id(v, name="schedule"):
+    v = _text(v, name, 12)
+    if not re.fullmatch(r"[a-z0-9]{1,12}", v):
+        raise ContractError(f"{name} must be a schedule's id from the state")
     return v
 
 
@@ -121,6 +170,32 @@ ACTIONS: dict[str, tuple[str, dict, set]] = {
     "speakers.volume": ("Set one speaker's volume, 0 to 100, or 'all' for every speaker that is playing.",
                         {"speaker": lambda v: _choice(v, "speaker", SPEAKERS + ["all"]),
                          "value": lambda v: _int(v, "value", 0, 100)}, {"speaker", "value"}),
+    # ---- lights ----
+    "lights.power": ("Turn a light on or off, by its id, or 'all' for every light.",
+                     {"light": _light, "on": lambda v: _bool(v, "on")}, {"light", "on"}),
+    "lights.brightness": (f"Set a light's brightness, {LIGHT_BRIGHT_MIN} to {LIGHT_BRIGHT_MAX} percent (or 'all'). "
+                          "Also turns it on.",
+                          {"light": _light, "value": lambda v: _int(v, "value", LIGHT_BRIGHT_MIN, LIGHT_BRIGHT_MAX)},
+                          {"light", "value"}),
+    "lights.white": (f"Set a light to white, from warm ({LIGHT_TEMP_MIN}) to daylight ({LIGHT_TEMP_MAX}) kelvin "
+                     "(or 'all'). Also turns it on.",
+                     {"light": _light, "kelvin": lambda v: _int(v, "kelvin", LIGHT_TEMP_MIN, LIGHT_TEMP_MAX)},
+                     {"light", "kelvin"}),
+    "lights.color": ("Set a light to a colour, as #rrggbb (or 'all'). Also turns it on.",
+                     {"light": _light, "color": _color}, {"light", "color"}),
+    "lights.schedule": ("Add a schedule to a light, or change one (give its id as schedule): at time (HH:MM, 24 hour) "
+                        "on the days given (" + ", ".join(DAYS) + "), do 'on' or 'off'. fade is minutes "
+                        f"(0 to {FADE_MAX}) to fade in from dim and warm, or out to off, starting at that time. "
+                        "On goes to brightness (default 100) and kelvin (default 2700). enabled false keeps it "
+                        f"but skips it. At most {SCHEDULES_MAX} per light.",
+                        {"light": _light, "schedule": _schedule_id, "time": _clock, "days": _days,
+                         "do": lambda v: _choice(v, "do", SCHEDULE_DO),
+                         "brightness": lambda v: _int(v, "brightness", LIGHT_BRIGHT_MIN, LIGHT_BRIGHT_MAX),
+                         "kelvin": lambda v: _int(v, "kelvin", LIGHT_TEMP_MIN, LIGHT_TEMP_MAX),
+                         "fade": lambda v: _int(v, "fade", 0, FADE_MAX),
+                         "enabled": lambda v: _bool(v, "enabled")}, {"light", "time", "days", "do"}),
+    "lights.unschedule": ("Remove one of a light's schedules, by its id from the state.",
+                          {"light": _light, "schedule": _schedule_id}, {"light", "schedule"}),
     # ---- TVs ----
     "tv.power": ("Turn a TV on or off. TVs: " + ", ".join(TVS) + ".",
                  {"tv": lambda v: _choice(v, "tv", TVS), "on": lambda v: _bool(v, "on")}, {"tv", "on"}),
@@ -199,6 +274,21 @@ EXAMPLE_STATE = {
             "on": ["lounge-room", "outside"],          # where it is playing
         },
         "spotify": {"linked": False},                  # true once Spotify is linked on the iMac
+    },
+    "lights": {
+        "available": True,          # false when the house has no lights set up, or none of them answers
+        "devices": [                # the lights in config.json, in that order
+            {"id": "lamp", "name": "Lamp", "available": True, "on": True, "brightness": 80,
+             "kelvin": 2700, "color": None,        # white: kelvin is set and color is null
+             "schedules": [                        # its own schedules, kept by the hub (it runs them, not the bulb)
+                 {"id": "a1b2c3", "time": "06:40", "days": ["mon", "tue", "wed", "thu", "fri"], "do": "on",
+                  "brightness": 80, "kelvin": 2700, "fade": 20, "enabled": True},
+             ],
+             "fading": False},                     # true while a scheduled fade is running
+            {"id": "desk", "name": "Desk", "available": True, "on": False, "brightness": 40,
+             "kelvin": None, "color": "#ff8800",   # a colour: color is set and kelvin is null
+             "schedules": [], "fading": False},
+        ],
     },
     "tvs": {
         "available": True,          # false when the couch-tv bridge does not answer

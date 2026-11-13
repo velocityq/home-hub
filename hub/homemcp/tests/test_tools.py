@@ -15,6 +15,7 @@ EXPECTED_TOOLS = {
     "house_status", "aircon_power", "aircon_set_temperature", "aircon_nudge", "aircon_mode", "aircon_fan",
     "aircon_room", "aircon_all_rooms", "music_control", "music_choose_speakers", "music_search_play", "music_start",
     "speaker_volume", "tv_power", "tv_volume", "tv_mute", "tv_open_app", "tv_play_title", "tv_remote", "frame_art_mode",
+    "light_power", "light_brightness", "light_white", "light_color", "light_schedule", "light_unschedule",
 }
 
 # tool, tool arguments, the action the hub should log, the args the hub should log, words in the answer
@@ -49,6 +50,17 @@ CALLS = [
      "Bluey"),
     ("tv_remote", {"tv": "living-room", "key": "ok"}, "tv.key", {"tv": "living-room", "key": "ok"}, "Pressed ok"),
     ("frame_art_mode", {"on": False}, "tv.art_mode", {"tv": "frame", "on": False}, "Art mode off"),
+    ("light_power", {"light": "lamp", "on": False}, "lights.power", {"light": "lamp", "on": False}, "Lamp (lamp): off"),
+    ("light_brightness", {"light": "desk", "value": 60}, "lights.brightness", {"light": "desk", "value": 60}, "on, 60%"),
+    ("light_white", {"light": "all", "kelvin": 4000}, "lights.white", {"light": "all", "kelvin": 4000}, "white 4000K"),
+    ("light_color", {"light": "lamp", "color": "#FF0000"}, "lights.color", {"light": "lamp", "color": "#ff0000"},
+     "colour #ff0000"),
+    ("light_schedule", {"light": "desk", "time": "6:40", "days": ["fri", "mon"], "do": "on", "fade": 20,
+                        "brightness": 80}, "lights.schedule",
+     {"light": "desk", "time": "06:40", "days": ["mon", "fri"], "do": "on", "fade": 20, "brightness": 80},
+     "06:40 mon,fri: on to 80%, fading over 20 min"),
+    ("light_unschedule", {"light": "lamp", "schedule": "a1b2c3"}, "lights.unschedule",
+     {"light": "lamp", "schedule": "a1b2c3"}, "Schedule removed"),
 ]
 
 

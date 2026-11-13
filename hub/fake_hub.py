@@ -15,6 +15,7 @@ import asyncio
 import copy
 import json
 import os
+import secrets
 import sys
 import time
 from datetime import datetime, timezone
@@ -50,7 +51,7 @@ class Fake:
     # ---- helpers ----
     def stamp(self):
         self.state["updated"] = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-        for dev in ("aircon", "speakers", "tvs"):
+        for dev in ("aircon", "speakers", "tvs", "lights"):
             self.state[dev]["available"] = dev not in self.fail
 
     async def broadcast(self):
@@ -70,11 +71,47 @@ class Fake:
     def apply(self, action, a):
         s = self.state
         group = action.split(".")[0]
-        dev = {"aircon": "aircon", "music": "speakers", "speakers": "speakers", "tv": "tvs"}[group]
+        dev = {"aircon": "aircon", "music": "speakers", "speakers": "speakers", "tv": "tvs", "lights": "lights"}[group]
         if dev in self.fail:
             raise DeviceDown(dev)
         ac, sp, tv = s["aircon"], s["speakers"], s["tvs"]
-        if action == "aircon.power":
+        if group == "lights":
+            rows = [d for d in s["lights"]["devices"] if a["light"] in (d["id"], C.LIGHT_ALL)]
+            if not rows:
+                raise NoLight()
+            if action in ("lights.schedule", "lights.unschedule"):
+                if a["light"] == C.LIGHT_ALL:
+                    raise NoLight("Pick one light for a schedule.")
+                sch = rows[0].setdefault("schedules", [])
+                old = next((x for x in sch if x["id"] == a.get("schedule")), None)
+                if a.get("schedule") and old is None:
+                    raise NoLight("That schedule is not there any more.")
+                if action == "lights.unschedule":
+                    sch.remove(old)
+                    return
+                new = dict(old or {"id": secrets.token_hex(3), "fade": 0, "enabled": True})
+                new.update({k: a[k] for k in ("time", "days", "do", "brightness", "kelvin", "fade", "enabled") if k in a})
+                on = new["do"] == "on"
+                new["brightness"] = (new.get("brightness") or 100) if on else None
+                new["kelvin"] = (new.get("kelvin") or 2700) if on else None
+                if old:
+                    sch[sch.index(old)] = new
+                else:
+                    sch.append(new)
+                sch.sort(key=lambda x: x["time"])
+                return
+            for d in rows:
+                if action == "lights.power":
+                    d["on"] = a["on"]
+                else:
+                    d["on"] = True
+                    if action == "lights.brightness":
+                        d["brightness"] = a["value"]
+                    elif action == "lights.white":
+                        d["kelvin"], d["color"] = a["kelvin"], None
+                    elif action == "lights.color":
+                        d["color"], d["kelvin"] = a["color"], None
+        elif action == "aircon.power":
             ac["power"] = a["on"]
         elif action == "aircon.set_temp":
             ac["set"] = a["value"]
@@ -164,8 +201,13 @@ class DeviceDown(Exception):
     def __init__(self, dev):
         self.dev = dev
         names = {"aircon": "The aircon is not answering.", "speakers": "The speakers are not answering.",
-                 "tvs": "The TV bridge is not answering."}
+                 "tvs": "The TV bridge is not answering.", "lights": "The lights are not answering."}
         super().__init__(names[dev])
+
+
+class NoLight(Exception):
+    def __init__(self, text="That is not one of this house's lights."):
+        super().__init__(text)
 
 
 class NothingPlaying(Exception):
@@ -261,7 +303,7 @@ def make_app(keys, wall_dir=None, cors=(), people=None, place=PLACE):
             return err(503, str(e), device=e.dev)
         except NeedsSpotify as e:
             return err(409, str(e), needs="spotify")
-        except (NothingPlaying, TvOff, NoGroup) as e:
+        except (NothingPlaying, TvOff, NoGroup, NoLight) as e:
             return err(409, str(e))
         await fake.broadcast()
         return web.json_response({"ok": True, "state": fake.state})

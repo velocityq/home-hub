@@ -28,6 +28,7 @@ const I = {
   chev: '<path d="M9 5l7 7-7 7"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  bulb: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>',
   remote: '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13.5h4M10 16.5h4"/>',
   back: '<path d="M9 6l-5 5 5 5"/><path d="M4 11h11a5 5 0 0 1 0 10h-3"/>',
   playpause: '<path d="M3 5l9 7-9 7z"/><path d="M15 5v14M20 5v14"/>',
@@ -125,6 +126,27 @@ function optimistic(v, action, a) {
     case "tv.mute": tv().muted = a.muted; break;
     case "tv.launch": tv().app = a.app; break;
     case "tv.art_mode": tv().art_mode = a.on; break;
+    case "lights.schedule": case "lights.unschedule": {
+      const d = ((v.lights && v.lights.devices) || []).find((x) => x.id === a.light); if (!d) break;
+      d.schedules = (d.schedules || []).filter((s) => s.id !== a.schedule);
+      if (action === "lights.schedule") {
+        const old = ((S.server.lights.devices.find((x) => x.id === a.light) || {}).schedules || []).find((s) => s.id === a.schedule) || {};
+        d.schedules.push({ ...old, id: a.schedule || "new", time: a.time, days: a.days, do: a.do, fade: a.fade || 0,
+                           brightness: a.do === "on" ? a.brightness || 100 : null, enabled: a.enabled !== false });
+        d.schedules.sort((x, y) => (x.time < y.time ? -1 : 1));
+      }
+      break;
+    }
+    case "lights.power": case "lights.brightness": case "lights.white": case "lights.color":
+      ((v.lights && v.lights.devices) || []).forEach((d) => {
+        if (!d.available || (a.light !== "all" && a.light !== d.id)) return;
+        if (action === "lights.power") { d.on = a.on; return; }
+        d.on = true;
+        if (action === "lights.brightness") d.brightness = a.value;
+        else if (action === "lights.white") { d.kelvin = a.kelvin; d.color = null; }
+        else { d.color = a.color; d.kelvin = null; }
+      });
+      break;
     default: break;
   }
 }
@@ -135,7 +157,26 @@ const MODES = { cool: ["Cool", "Cooling", "snow", "cool"], heat: ["Heat", "Heati
 const AC = () => (S.view ? S.view.aircon : undefined);
 const SP = () => (S.view ? S.view.speakers : undefined);
 const TV = () => (S.view ? S.view.tvs : undefined);
-const mode = (ac) => MODES[ac.mode] || MODES.auto;
+// Lights. In a house with lights and no aircon answering, Lighting takes the aircon's place on the wall.
+const LI = () => (S.view ? S.view.lights : undefined);
+const liList = (li) => (li && li.devices) || [];
+const litUp = () => { const ac = AC(); return liList(LI()).length > 0 && !(ac && ac.available); };
+const liOn = (li) => liList(li).filter((d) => d.available && d.on);
+const liBright = (li) => { const on = liOn(li); return on.length ? Math.round(on.reduce((s, d) => s + (d.brightness || 0), 0) / on.length) : null; };
+const liStatus = (li) => { const all = liList(li); return all.every((d) => !d.available) ? "Not answering" : `${liOn(li).length} of ${all.length} on`; };
+const liName = (id) => (id === "all" ? "Lights" : (liList(LI()).find((d) => d.id === id) || { name: id }).name);
+const LI_MIN = 2200, LI_MAX = 6500;
+function kelvinHex(k) {                     // a swatch for a white tone: amber at the warm end, bluish at daylight
+  const t = Math.max(0, Math.min(1, ((k || 2700) - LI_MIN) / (LI_MAX - LI_MIN)));
+  const mix = (a, b) => Math.round(a + (b - a) * t);
+  return `rgb(${mix(255, 222)},${mix(170, 236)},${mix(84, 255)})`;
+}
+const liTint = (d) => (d.color && /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : kelvinHex(d.kelvin));
+const liState = (d) => (!d.available ? "Not answering" : d.on ? `On · ${d.brightness != null ? d.brightness + "%" : ""}` : "Off");
+const LI_WHITES = [[2200, "Candle"], [2700, "Warm"], [4000, "Neutral"], [6500, "Daylight"]];
+const LI_COLORS = [["#ff0000", "Red"], ["#ff6a00", "Orange"], ["#ffd000", "Yellow"], ["#00ff40", "Green"], ["#00e5ff", "Cyan"],
+                   ["#0040ff", "Blue"], ["#8a00ff", "Purple"], ["#ff00aa", "Pink"]];
+const mode =(ac) => MODES[ac.mode] || MODES.auto;
 const zones = (ac) => ac.zones || [];
 const zonesOn = (ac) => zones(ac).filter((z) => z.on).length;
 const acTint = (ac) => (ac.power ? mode(ac)[3] : "off");
@@ -185,7 +226,7 @@ function who(label) {
     ${PEOPLE.map(btn).join("")}</div>`;
 }
 // On the wall tablet, the AirTouch app is one tap away: a button next to the gear in every layout.
-const gear = () => (window.HubAndroid ? `<button class="gear airtouch" data-do="airtouch" aria-label="Open the AirTouch app">${svg("fan")}</button>` : "") +
+const gear = () => (window.HubAndroid && !litUp() ? `<button class="gear airtouch" data-do="airtouch" aria-label="Open the AirTouch app">${svg("fan")}</button>` : "") +
   `<button class="gear" data-open="settings" data-src="gear" aria-label="Look settings">${svg("gear")}</button>`;
 const micBtn = (style) => `<button class="mic" id="mic" data-src="mic" aria-label="Hold to talk" style="${style || ""}"><span class="lvl"></span>${svg("mic")}</button>`;
 const NATIVE = !!window.HubAndroid;   // inside the wall tablet's own app (tablet/), which records the voice itself
@@ -195,8 +236,128 @@ const powerBtn = (doName, on, color, tv, busy) => `<button class="btn round ${on
 const prog = (h) => `<div class="vol grow" ${h ? `style="height:${h}px"` : ""}><i data-prog style="width:${progPct()}%"></i></div>`;
 
 // ---------- layout A: lock screen and dock ----------
+// ---------- lighting (in the aircon's place when the house has lights and no aircon) ----------
+const liBig = (li, size) => { const b = liBright(li); return `<div class="big" style="font-size:${size}px">${b == null ? "Off" : b + "%"}</div>`; };
+const liNudgeRow = (li, size, style) => `<div class="row" style="justify-content:space-between;${style || ""}">
+    <button class="btn" data-do="liNudge" data-arg="-10" aria-label="Dimmer">−</button>${liBig(li, size)}<button class="btn" data-do="liNudge" data-arg="10" aria-label="Brighter">+</button></div>`;
+const liDown = () => down("Lights not answering", "Check they are switched on at the wall.");
+function lightCardA() {
+  const li = LI(), any = liOn(li).length > 0;
+  if (!li.available) return `<div class="card col" data-card="lights" data-open="lights" data-src="a-lights" style="flex:1.05;padding:20px 22px;justify-content:center">${liDown()}</div>`;
+  return `<div class="card ${any ? "on" : ""} col" data-card="lights" data-open="lights" data-src="a-lights" style="flex:1.05;padding:20px 22px">
+      <div class="row"><div class="ic ${any ? "warm" : "off"}">${svg("bulb")}</div>
+        <div class="col grow"><div class="title">Lighting</div><div class="sub">${liStatus(li)}</div></div>
+        ${powerBtn("liAll", any, "warm")}</div>
+      ${liNudgeRow(li, 72, "margin-top:6px;flex:1")}
+    </div>`;
+}
+function lightCardB() {
+  const li = LI(), any = liOn(li).length > 0;
+  if (!li.available) return `<div class="card col" data-card="lights" data-open="lights" data-src="b-lights" style="padding:20px 22px;height:300px;justify-content:center">${liDown()}</div>`;
+  const rows = liList(li).slice(0, 3).map((d) => `<div class="row" style="height:44px"><span class="lidot" style="background:${d.available && d.on ? liTint(d) : "transparent"}"></span>
+      <div class="grow ellip" style="font-size:16px;font-weight:600">${esc(d.name)}</div><div class="sub" style="font-size:14px">${esc(liState(d))}</div></div>`).join("");
+  return `<div class="card ${any ? "on" : ""} col" data-card="lights" data-open="lights" data-src="b-lights" style="padding:20px 22px;height:300px">
+      <div class="row"><div class="ic ${any ? "warm" : "off"}">${svg("bulb")}</div><div class="col grow"><div class="title">Lighting</div><div class="sub">${liStatus(li)}</div></div>
+        ${powerBtn("liAll", any, "warm")}</div>
+      ${liNudgeRow(li, 76, "margin:14px 0 8px")}
+      <div class="col" style="margin-top:auto;border-top:1px solid ${any ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.14)"};padding-top:6px">${rows}</div></div>`;
+}
+// ---------- a light's schedules (the bottom of its card in the Lighting panel) ----------
+const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const DAY1 = { mon: "M", tue: "T", wed: "W", thu: "T", fri: "F", sat: "S", sun: "S" };
+const WEEKDAYS = DAYS.slice(0, 5), WEEKEND = DAYS.slice(5);
+let SED = null;                 // the schedule being added or changed: {light, id, time, days, do, fade, brightness}
+const same = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
+function daysText(days) {
+  if (same(days, DAYS)) return "Every day";
+  if (same(days, WEEKDAYS)) return "Weekdays";
+  if (same(days, WEEKEND)) return "Weekends";
+  return days.map((d) => d[0].toUpperCase() + d.slice(1)).join(", ");
+}
+function clock12(hm) {
+  const [h, m] = hm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
+function addMin(hm, n) {
+  const [h, m] = hm.split(":").map(Number), t = (h * 60 + m + n) % 1440;
+  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+}
+function schedWhat(s) {
+  if (s.do === "on") return s.fade ? `Fades up to ${s.brightness}%, bright by ${clock12(addMin(s.time, s.fade))}` : `On at ${s.brightness}%`;
+  return s.fade ? `Fades out, off by ${clock12(addMin(s.time, s.fade))}` : "Turns off";
+}
+function schedBox(d) {
+  const rows = d.schedules || [], editing = SED && SED.light === d.id;
+  if (editing) return `<div class="sched">${schedEditor(d)}</div>`;
+  const list = rows.map((s) => `<div class="srow ${s.enabled ? "" : "paused"}">
+      <button class="col grow" data-do="schedEdit" data-tv="${esc(d.id)}" data-arg="${esc(s.id)}" style="text-align:left;min-width:0">
+        <b style="font-size:20px">${clock12(s.time)}</b><span class="sub ellip" style="font-size:14px">${esc(daysText(s.days))} · ${esc(schedWhat(s))}${s.enabled ? "" : " · Paused"}</span></button>
+      <button class="sw ${s.enabled ? "on" : ""}" data-do="schedToggle" data-tv="${esc(d.id)}" data-arg="${esc(s.id)}" aria-label="${s.enabled ? "Pause" : "Turn on"} this schedule"></button></div>`).join("");
+  return `<div class="sched">
+      <div class="row"><div class="label grow">Schedule${d.fading ? ' · <span style="color:var(--warm)">fading now</span>' : ""}</div></div>
+      ${list || `<div class="sub" style="font-size:14px">No schedule yet.</div>`}
+      ${rows.length < 8 ? `<button class="pill" data-do="schedNew" data-tv="${esc(d.id)}" style="height:48px;align-self:flex-start">${svg("plus")} Add a schedule</button>` : ""}
+    </div>`;
+}
+function schedEditor(d) {
+  const e = SED, lid = esc(d.id);
+  const day = (k) => `<button class="daychip ${e.days.includes(k) ? "sel" : ""}" data-do="schedDay" data-tv="${lid}" data-arg="${k}" aria-label="${k}">${DAY1[k]}</button>`;
+  const opt = (doName, arg, label, sel) => `<button class="pill ${sel ? "sel" : ""}" data-do="${doName}" data-tv="${lid}" data-arg="${arg}" style="height:44px;padding:0 14px;font-size:15px">${label}</button>`;
+  const fades = [[0, "At once"], [10, "10 min"], [20, "20 min"], [30, "30 min"], [60, "1 hour"]];
+  return `<div class="label">${e.id ? "Change schedule" : "New schedule"}</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap">
+      <input type="time" class="stime" data-stime="${lid}" value="${esc(e.time)}" aria-label="Start time" required>
+      ${opt("schedDo", "on", "Turn on", e.do === "on")}${opt("schedDo", "off", "Turn off", e.do === "off")}</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${DAYS.map(day).join("")}
+      ${opt("schedDays", "weekdays", "Weekdays", same(e.days, WEEKDAYS))}${opt("schedDays", "all", "Every day", same(e.days, DAYS))}</div>
+    <div class="label" style="margin-top:4px">${e.do === "on" ? "Fade in over" : "Fade out over"}</div>
+    <div class="row" style="gap:6px;flex-wrap:wrap">${fades.map(([m, t]) => opt("schedFade", m, t, e.fade === m)).join("")}</div>
+    ${e.do === "on" ? `<div class="label" style="margin-top:4px">Brightness</div>
+      <div class="row" style="gap:12px"><input type="range" min="10" max="100" step="5" value="${e.brightness}" data-sbri="${lid}" aria-label="Schedule brightness" style="--p:${(e.brightness - 10) / 0.9}%">
+        <span class="sub" data-vol-label style="width:44px;text-align:right;font-size:15px">${e.brightness}%</span></div>` : ""}
+    <div class="sub" style="font-size:14px" data-ssum>${esc(daysText(e.days) || "Pick a day")} · ${clock12(e.time)} · ${esc(schedWhat(e))}</div>
+    <div class="row" style="gap:10px;margin-top:4px">
+      <button class="pill sel" data-do="schedSave" data-tv="${lid}" style="height:52px;padding:0 24px" ${e.days.length ? "" : "disabled"}>Save</button>
+      <button class="pill" data-do="schedCancel" data-tv="${lid}" style="height:52px;padding:0 20px">Cancel</button>
+      ${e.id ? `<button class="pill" data-do="schedDelete" data-tv="${lid}" style="height:52px;padding:0 20px;margin-left:auto">Delete</button>` : ""}</div>`;
+}
+const schedOf = (lid, sid) => ((liList(LI()).find((d) => d.id === lid) || {}).schedules || []).find((s) => s.id === sid);
+
+function sheetLights() {
+  const li = LI(), list = liList(li);
+  if (!li || !list.length) return `<div style="padding-right:76px"><h2>Lighting</h2></div><div style="margin-top:30px">${liDown()}</div>`;
+  const any = liOn(li).length > 0;
+  const cards = list.map((d) => {
+    const on = d.available && d.on, dim = d.available ? "" : "opacity:.4;pointer-events:none";
+    const bri = d.brightness != null ? d.brightness : 100, kel = d.kelvin || 2700;
+    const whites = LI_WHITES.map(([k, n]) => `<button class="pill ${on && d.kelvin === k ? "sel" : ""}" data-do="liWhite" data-tv="${esc(d.id)}" data-arg="${k}" style="height:44px;padding:0 14px;font-size:15px"><span class="lidot" style="background:${kelvinHex(k)}"></span>${n}</button>`).join("");
+    const colors = LI_COLORS.map(([c, n]) => `<button class="swatch ${on && d.color === c ? "sel" : ""}" data-do="liColor" data-tv="${esc(d.id)}" data-arg="${c}" aria-label="${n}" title="${n}" style="background:${c}"></button>`).join("");
+    return `<div class="tvcard ${on ? "on" : ""}" data-light="${esc(d.id)}">
+      <div class="row"><span class="lidot big" style="background:${on ? liTint(d) : "transparent"}"></span>
+        <div class="col grow" style="min-width:0"><div style="font-size:22px;font-weight:700" class="ellip">${esc(d.name)}</div><div class="sub" style="font-size:14px">${esc(liState(d))}</div></div>
+        <button class="btn round ${on ? "warm" : ""}" data-do="liToggle" data-arg="${esc(d.id)}" aria-label="Power" style="width:64px;height:64px;${dim}">${svg("power")}</button></div>
+      <div class="col" style="gap:4px;${dim}">
+        <div class="label">Brightness</div>
+        <div class="row" style="gap:12px"><input type="range" min="10" max="100" step="1" value="${bri}" data-bri="${esc(d.id)}" aria-label="${esc(d.name)} brightness" style="--p:${(bri - 10) / 0.9}%">
+          <span class="sub" data-vol-label style="width:44px;text-align:right;font-size:15px">${bri}%</span></div>
+        <div class="label" style="margin-top:8px">White</div>
+        <input type="range" class="kelvin" min="${LI_MIN}" max="${LI_MAX}" step="100" value="${kel}" data-kel="${esc(d.id)}" aria-label="${esc(d.name)} white tone, warm to daylight">
+        <div class="row" style="gap:8px 6px;flex-wrap:wrap">${whites}</div>
+        <div class="label" style="margin-top:12px">Colour</div>
+        <div class="row" style="gap:10px;flex-wrap:wrap">${colors}</div>
+      </div>
+      ${schedBox(d)}</div>`;
+  }).join("");
+  return `<div class="row" style="padding-right:76px;margin-bottom:22px"><div class="ic ${any ? "warm" : "off"}" style="width:52px;height:52px">${svg("bulb")}</div>
+      <div class="col grow"><h2>Lighting</h2><div class="sub">${liStatus(li)}</div></div>
+      <button class="pill" data-do="liAllTo" data-arg="on" style="height:56px;padding:0 22px">All on</button>
+      <button class="pill" data-do="liAllTo" data-arg="off" style="height:56px;padding:0 22px">All off</button></div>
+    <div class="tvs" style="grid-template-columns:repeat(${Math.max(2, Math.min(3, list.length))},1fr)">${cards}</div>`;
+}
+
 function acCardA() {
   const ac = AC();
+  if (S.view && litUp()) return lightCardA();
   if (!S.view) return `<div class="card col" style="flex:1.05;padding:20px 22px">${waitCard("Aircon")}</div>`;
   if (!ac) return "";
   if (!ac.available) return `<div class="card col" data-card="aircon" style="flex:1.05;padding:20px 22px;justify-content:center">${down("Aircon not answering")}</div>`;
@@ -284,7 +445,8 @@ function layoutB() {
     music = `<div class="card col" style="padding:18px 22px;height:192px">${waitCard("Music")}</div>`;
     tvCard = `<div class="card col" style="padding:14px 22px;flex:1">${waitCard("TVs")}</div>`;
   } else {
-    if (ac && !ac.available) acCard = `<div class="card col" data-card="aircon" style="padding:20px 22px;height:300px;justify-content:center">${down("Aircon not answering")}</div>`;
+    if (litUp()) acCard = lightCardB();
+    else if (ac && !ac.available) acCard = `<div class="card col" data-card="aircon" style="padding:20px 22px;height:300px;justify-content:center">${down("Aircon not answering")}</div>`;
     else if (ac) {
       const pills = Object.entries(MODES).map(([k, m]) => `<button class="pill ${ac.mode === k ? "sel" + (k === "heat" ? " heat" : "") : ""}" data-do="acMode" data-arg="${k}" style="height:44px;padding:0 15px">${m[0]}</button>`).join("");
       const onRooms = zones(ac).filter((z) => z.on).map((z) => esc(z.name)).join(", ") || "No rooms on";
@@ -343,7 +505,16 @@ function layoutC() {
   if (!S.view) {
     climate = `<div class="card" style="grid-column:1/-1;padding:16px 20px;border-radius:20px"><div class="wait">Connecting to the hub…</div></div>`;
   } else {
-    if (ac && !ac.available) { pills += downPill("warn", "Aircon not answering"); climate = `<div class="card" data-card="aircon" style="grid-column:1/-1;padding:14px 18px;border-radius:20px">${down("Aircon not answering")}</div>`; }
+    if (litUp()) {
+      const li = LI(), any = liOn(li).length > 0, b = liBright(li);
+      if (!li.available) pills += downPill("warn", "Lights not answering");
+      else pills += pill("lights", "bulb", any ? "warm" : "off", `Lighting · ${any ? b + "%" : "Off"}`, any);
+      climate = tile({ name: `Lighting · ${any ? b + "%" : "Off"}`, status: liStatus(li), icon: "bulb", on: any, color: "warm", wide: true,
+                       open: "lights", src: "c-lights",
+                       extra: `<div class="row" style="gap:8px">${small("liNudge", -10, "−", "Dimmer")}${small("liNudge", 10, "+", "Brighter")}</div>` });
+      climate += liList(li).map((d) => tile({ name: d.name, status: liState(d), icon: "bulb", on: d.available && d.on, color: "warm", do: "liToggle", arg: d.id })).join("");
+    }
+    else if (ac && !ac.available) { pills += downPill("warn", "Aircon not answering"); climate = `<div class="card" data-card="aircon" style="grid-column:1/-1;padding:14px 18px;border-radius:20px">${down("Aircon not answering")}</div>`; }
     else if (ac) {
       pills += pill("aircon", mode(ac)[2], acTint(ac), `Climate · ${ac.power ? ac.set + "°" : "Off"}`, ac.power);
       climate = tile({ name: `Aircon · ${ac.power ? mode(ac)[0] + " " + ac.set + "°" : "Off"}`, status: acStatus(ac), icon: mode(ac)[2], on: ac.power,
@@ -374,7 +545,7 @@ function layoutC() {
   <div class="row" style="position:absolute;left:24px;bottom:318px;gap:10px;align-items:flex-end">${pills}</div>
   <div class="talk" style="position:absolute;right:24px;bottom:318px">${kbdBtn()}${micBtn()}</div>
   <div style="position:absolute;left:24px;right:24px;bottom:24px;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));grid-template-rows:auto 100px auto 100px;gap:10px">
-    ${head("Climate")}${climate}${head("Speakers and TVs")}${media}</div>`;
+    ${head(S.view && litUp() ? "Lighting" : "Climate")}${climate}${head("Speakers and TVs")}${media}</div>`;
 }
 
 // ---------- the expanded sheets ----------
@@ -768,6 +939,7 @@ function sheetPerson() {
 
 const SHEETS = {
   person: { fn: sheetPerson, tone: "dark", live: true },
+  lights: { fn: sheetLights, tone: "dark", live: true },
   aircon: { fn: sheetAircon, tone: "light", live: true }, music: { fn: sheetMusic, tone: "dark", live: true },
   tvs: { fn: sheetTvs, tone: "dark", live: true }, settings: { fn: sheetSettings, tone: "dark", live: true },
   ask: { fn: sheetAsk, tone: "dark", rect: ASK_RECT }, answer: { fn: sheetAnswer, tone: "dark", rect: ANS_RECT },
@@ -801,6 +973,13 @@ function describe(action, a) {
     case "tv.launch": return `${a.app} on the ${tn(a.tv)} TV`;
     case "tv.play": return `Playing “${a.title}” on the ${tn(a.tv)} TV`;
     case "tv.art_mode": return `Art mode ${onOff(a.on)}`;
+    case "tv.key": return `${String(a.key).replace("_", " ")} on the ${tn(a.tv)} TV`;
+    case "lights.power": return `${liName(a.light)} ${onOff(a.on)}`;
+    case "lights.brightness": return `${liName(a.light)} at ${a.value}%`;
+    case "lights.white": return `${liName(a.light)} white`;
+    case "lights.color": return `${liName(a.light)} colour changed`;
+    case "lights.schedule": return `${liName(a.light)} schedule saved`;
+    case "lights.unschedule": return `${liName(a.light)} schedule removed`;
     default: return String(action || "Something");
   }
 }
@@ -828,10 +1007,17 @@ function renderUI() {
   $("#ui").innerHTML = { a: layoutA, b: layoutB, c: layoutC }[S.look.layout]();
   if (S.open && S.openSrc) { const el = $(`[data-src="${CSS.escape(S.openSrc)}"]`); if (el) el.style.visibility = "hidden"; }
 }
-function renderSheet() {
+function renderSheet(force) {
   const sh = $(".sheet .full");
   if (!sh || !S.open || $(".sheet").dataset.closing) return;
   if (!SHEETS[S.open].live || S.dragging) return;     // no redraw while a slider is held
+  if (S.open === "lights" && SED && !force) return;   // a schedule is being edited: keep it (and the time picker) still
+  if (S.open === "lights") {                          // keep the card's scroll where it was
+    const at = {}; sh.querySelectorAll("[data-light]").forEach((c) => { at[c.dataset.light] = c.scrollTop; });
+    sh.innerHTML = SHEETS.lights.fn();
+    sh.querySelectorAll("[data-light]").forEach((c) => { if (at[c.dataset.light]) c.scrollTop = at[c.dataset.light]; });
+    return;
+  }
   if (S.open === "music") {                           // keep the search box and the lists steady: redraw only the live parts
     const sp = SP(), root = sh.querySelector("[data-mroot]");
     if (root && sp && sp.available && root.dataset.mroot === (linkedSp(sp) ? "1" : "0")) {
@@ -933,6 +1119,7 @@ function swapSheet(name) {                            // the ask sheet turns int
 function closeSheet() {
   const sh = $(".sheet"); if (!sh || sh.dataset.closing) return;
   sh.dataset.closing = "1";
+  SED = null;                                         // an unsaved schedule is dropped with the sheet
   if (S.open === "person") personGone();
   clearTimeout(answerTimer);
   const src = S.openSrc;
@@ -1112,7 +1299,7 @@ function act(action, args) {
   if (S.conn !== "online") return Promise.resolve();
   const op = { id: ++opSeq, action, args };
   pending.push(op); recompute(); render();
-  const q = action.startsWith("aircon") ? "aircon" : action.startsWith("tv") ? "tvs" : "speakers";
+  const q = action.startsWith("aircon") ? "aircon" : action.startsWith("tv") ? "tvs" : action.startsWith("lights") ? "lights" : "speakers";
   return (queues[q] = (queues[q] || Promise.resolve()).then(() => post(op)));
 }
 // TV volume: quick taps on + or - are added up and sent as one change (the number moves at once), so the
@@ -1129,6 +1316,25 @@ function tvVolTap(tv, d) {
     delete volTaps[tv];
     if (!v.op.args.delta || S.conn !== "online") { settle(v.op, null); return; }
     queues.tvs = (queues.tvs || Promise.resolve()).then(() => post(v.op));
+  }, 350);
+}
+// The − and + on the Lighting card: every light's brightness together, quick taps added up into one change.
+let liTaps = null;
+function liNudgeTap(d) {
+  if (S.conn !== "online" || !d) return;
+  if (!liTaps) {
+    const b = liBright(LI());
+    liTaps = { op: { id: ++opSeq, action: "lights.brightness", args: { light: "all", value: b == null ? 50 : b } } };
+    pending.push(liTaps.op);
+  }
+  const v = liTaps;
+  v.op.args.value = Math.max(10, Math.min(100, Math.round((v.op.args.value + d) / 10) * 10));
+  recompute(); render();
+  clearTimeout(v.timer);
+  v.timer = setTimeout(() => {
+    liTaps = null;
+    if (S.conn !== "online") { settle(v.op, null); return; }
+    queues.lights = (queues.lights || Promise.resolve()).then(() => post(v.op));
   }, 350);
 }
 // A remote button: sent in order, and nothing on the screen is redrawn (a press changes nothing shown, and
@@ -1240,6 +1446,34 @@ const DO = {
     if (t && t.power === "on") { act("tv.launch", { tv, app }); toast(`Opening ${app} on the ${t.name} TV. Sign in there.`, 4500); }
     else toast(`${app} is on the panel. Turn the TV on and open it to sign in.`, 4500);
   },
+  liAll: () => act("lights.power", { light: "all", on: !liOn(LI()).length }),
+  liAllTo: (to) => act("lights.power", { light: "all", on: to === "on" }),
+  liToggle: (id) => { const d = liList(LI()).find((x) => x.id === id); if (d && d.available) act("lights.power", { light: id, on: !d.on }); },
+  liNudge: (d) => liNudgeTap(Number(d)),
+  liWhite: (k, id) => act("lights.white", { light: id, kelvin: Number(k) }),
+  liColor: (c, id) => act("lights.color", { light: id, color: c }),
+  schedNew: (_, lid) => { SED = { light: lid, id: null, time: "07:00", days: WEEKDAYS.slice(), do: "on", fade: 20, brightness: 100 }; renderSheet(true); },
+  schedEdit: (sid, lid) => { const s = schedOf(lid, sid); if (s) { SED = { light: lid, ...s, brightness: s.brightness || 100 }; renderSheet(true); } },
+  schedCancel: () => { SED = null; renderSheet(true); },
+  schedDo: (v) => { if (SED) { SED.do = v; renderSheet(true); } },
+  schedFade: (m) => { if (SED) { SED.fade = Number(m); renderSheet(true); } },
+  schedDay: (k) => { if (!SED) return; SED.days = SED.days.includes(k) ? SED.days.filter((x) => x !== k) : DAYS.filter((x) => x === k || SED.days.includes(x)); renderSheet(true); },
+  schedDays: (w) => { if (SED) { SED.days = (w === "all" ? DAYS : WEEKDAYS).slice(); renderSheet(true); } },
+  schedSave: (_, lid) => {
+    const e = SED; if (!e || !e.days.length) return;
+    const t = $(`[data-stime="${CSS.escape(lid)}"]`); if (t && /^\d{2}:\d{2}$/.test(t.value)) e.time = t.value;
+    const args = { light: lid, time: e.time, days: e.days, do: e.do, fade: e.fade };
+    if (e.do === "on") args.brightness = e.brightness;
+    if (e.id) { args.schedule = e.id; args.enabled = e.enabled !== false; }
+    SED = null; act("lights.schedule", args);
+  },
+  schedDelete: (_, lid) => { const e = SED; if (!e || !e.id) return; SED = null; act("lights.unschedule", { light: lid, schedule: e.id }); },
+  schedToggle: (sid, lid) => {
+    const s = schedOf(lid, sid); if (!s) return;
+    const args = { light: lid, schedule: sid, time: s.time, days: s.days, do: s.do, fade: s.fade, enabled: !s.enabled };
+    if (s.do === "on") args.brightness = s.brightness;
+    act("lights.schedule", args);
+  },
   tvVol: (d, tv) => tvVolTap(tv, Number(d)),
   tvMute: (_, tv) => { const t = tvList(TV()).find((x) => x.id === tv); if (t) act("tv.mute", { tv, muted: !t.muted }); },
   frameArt: (_, tv) => { const t = tvList(TV()).find((x) => x.id === (tv || "frame")); if (t) act("tv.art_mode", { tv: t.id, on: !t.art_mode }); },
@@ -1345,12 +1579,30 @@ stage.addEventListener("pointerdown", (e) => {
 });
 stage.addEventListener("input", (e) => {
   if (e.target.id === "msearch") { M.q = e.target.value; clearTimeout(M.timer); M.timer = setTimeout(doSearch, 380); return; }
-  const t = e.target; if (!t.dataset || t.dataset.vol == null) return;
+  const t = e.target; if (!t.dataset) return;
+  if (t.dataset.sbri != null && SED) {      // a schedule's brightness (the editor is not redrawn while it moves)
+    SED.brightness = Number(t.value);
+    t.style.setProperty("--p", (t.value - 10) / 0.9 + "%");
+    const lab = t.parentNode.querySelector("[data-vol-label]"); if (lab) lab.textContent = t.value + "%";
+    return;
+  }
+  if (t.dataset.stime != null && SED) { if (/^\d{2}:\d{2}$/.test(t.value)) SED.time = t.value; return; }
+  if (t.dataset.bri != null) {              // a light's brightness, 10 to 100
+    t.style.setProperty("--p", (t.value - 10) / 0.9 + "%");
+    const lab = t.parentNode.querySelector("[data-vol-label]"); if (lab) lab.textContent = t.value + "%";
+    return;
+  }
+  if (t.dataset.vol == null) return;
   t.style.setProperty("--p", t.value + "%");
   const lab = t.parentNode.querySelector("[data-vol-label]"); if (lab) lab.textContent = t.value;
 });
 stage.addEventListener("change", (e) => {
-  const t = e.target; if (!t.dataset || t.dataset.vol == null) return;
+  const t = e.target; if (!t.dataset) return;
+  if (t.dataset.sbri != null) { S.dragging = false; if (SED) SED.brightness = Number(t.value); renderSheet(true); return; }
+  if (t.dataset.stime != null) { if (SED && /^\d{2}:\d{2}$/.test(t.value)) { SED.time = t.value; renderSheet(true); } return; }
+  if (t.dataset.bri != null) { S.dragging = false; act("lights.brightness", { light: t.dataset.bri, value: Number(t.value) }); return; }
+  if (t.dataset.kel != null) { S.dragging = false; act("lights.white", { light: t.dataset.kel, kelvin: Number(t.value) }); return; }
+  if (t.dataset.vol == null) return;
   S.dragging = false;
   act("speakers.volume", { speaker: t.dataset.vol, value: Number(t.value) });
 });

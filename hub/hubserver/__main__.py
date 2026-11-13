@@ -48,7 +48,9 @@ def build(cfg, keys=None):
     aircon = Aircon(cfg, on_change=changed, remember=cfgmod.remember, recall=cfgmod.recall)
     speakers = Speakers(cfg, on_change=changed, backend=RealCast(cfg, notify=changed_threadsafe), spotify=spotify)
     tvs = Tvs(cfg, on_change=changed)
-    hub = Hub(cfg, aircon, speakers, tvs, spotify)
+    from .lights import Lights
+    lights = Lights(cfg, on_change=changed) if cfg.get("lights") else None
+    hub = Hub(cfg, aircon, speakers, tvs, spotify, lights=lights)
     holder["hub"] = hub
     return make_app(hub, keys or cfgmod.Keys(), cfg)
 
