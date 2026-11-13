@@ -2,7 +2,8 @@
 
 Live: one /api/events stream per TV (server-sent events, the same JSON as /api/now).
 Backstop: /api/tvs every 15 s (it also carries the Frame's Art Mode) and /api/now every 60 s.
-If the hub config has bridge_key, every call sends it as X-Bridge-Key.
+If the hub config has bridge_key, every call sends it as X-Bridge-Key and X-API-Key (couch-tv's pairing_key).
+"tvs" in the hub config lists the contract TVs this house has; the others are not shown or read.
 """
 from __future__ import annotations
 
@@ -32,6 +33,9 @@ class Tvs:
         self.base = cfg["bridge_url"].rstrip("/")
         self.key = cfg.get("bridge_key")
         self.names = cfg["tv_names"]
+        # The contract's TVs this house has ("tvs" in config.json, default all). Only these are shown and read.
+        want = cfg.get("tvs")
+        self.present = [t for t in C.TVS if t in want] if isinstance(want, list) and want else list(C.TVS)
         self.on_change = on_change
         self.session = session
         self._own_session = session is None
@@ -39,19 +43,24 @@ class Tvs:
         self.now = {}            # id -> /api/now payload
         self.apps = {}           # id -> [app rows]
         self.apps_at = 0.0
-        self.ok = False          # the bridge answered the last read
+        # After a volume press a TV can go on reporting the old level for a moment (a Samsung is read about
+        # half a second later). Until it reports a new one, the level it should now have is shown instead.
+        self._vol_hint = {}      # id -> (level before the press, level expected, good until)
+        self.ok = False         # the bridge answered the last read
         self.ok_at = 0.0
         self._tasks = []
 
     def _headers(self):
-        return {"X-Bridge-Key": self.key} if self.key else {}
+        # couch-tv reads its pairing_key from X-API-Key (or Authorization: Bearer); X-Bridge-Key is kept for
+        # bridges that read that one.
+        return {"X-Bridge-Key": self.key, "X-API-Key": self.key} if self.key else {}
 
     # ---------- life ----------
     async def start(self):
         if self.session is None:
             self.session = aiohttp.ClientSession()
         self._tasks = [asyncio.create_task(self._poll(), name="tvs-poll")]
-        self._tasks += [asyncio.create_task(self._events(t), name=f"tvs-events-{t}") for t in C.TVS]
+        self._tasks += [asyncio.create_task(self._events(t), name=f"tvs-events-{t}") for t in self.present]
 
     async def stop(self):
         for t in self._tasks:
@@ -120,12 +129,30 @@ class Tvs:
         pl = body.get("playing")
         if isinstance(pl, dict):    # the position moves every few seconds; it is not part of the hub state
             body["playing"] = {k: pl.get(k) for k in ("title", "state")}
+        hint = self._vol_hint.get(tv)
+        vol = body.get("volume") or {}
+        if hint and vol.get("known") and vol.get("level") != hint[0]:
+            self._vol_hint.pop(tv, None)        # the TV has reported its new level: that one counts
         if body != self.now.get(tv):
             self.now[tv] = body
             self.on_change()
 
+    def _hint_volume(self, tv, shown, delta):
+        """shown: the level the wall had before this press (it may itself be a hint from the press before)."""
+        reported = ((self.now.get(tv) or {}).get("volume") or {}).get("level")
+        if shown is None or reported is None:
+            return
+        self._vol_hint[tv] = (reported, max(0, min(100, shown + delta)), time.time() + 4)
+
+        def expire():
+            h = self._vol_hint.get(tv)
+            if h and h[2] <= time.time():
+                self._vol_hint.pop(tv, None)
+                self.on_change()
+        asyncio.get_running_loop().call_later(4.1, expire)
+
     async def read_apps(self):
-        for tv in C.TVS:
+        for tv in self.present:
             try:
                 st, body = await self._get("/api/apps", tv=tv)
                 if st == 200:
@@ -141,7 +168,7 @@ class Tvs:
             try:
                 await self.read_all()
                 if n % 4 == 0:
-                    for tv in C.TVS:
+                    for tv in self.present:
                         await self.read_now(tv)
                 if time.time() - self.apps_at > 600:
                     await self.read_apps()
@@ -195,16 +222,20 @@ class Tvs:
         vol = n.get("volume") or {}
         app = n.get("app") or {}
         art = t.get("art_mode") if kind == "samsung" else None
+        level = vol.get("level") if on and vol.get("known") else None
+        hint = self._vol_hint.get(tv)
+        if hint and level is not None and hint[2] > time.time() and level == hint[0]:
+            level = hint[1]
         return {"id": tv, "name": self.names.get(tv, tv), "kind": kind, "power": "on" if on else "off",
                 "app": (app.get("name") or None) if on else None,
-                "volume": vol.get("level") if on and vol.get("known") else None,
+                "volume": level,
                 "muted": bool(vol.get("muted")) if on and vol else None,
                 "art_mode": art if kind == "samsung" else None,
                 "waking": bool(n.get("waking"))}
 
     def app_names(self):
         seen, out = set(), []
-        for tv in C.TVS:
+        for tv in self.present:
             for a in self.apps.get(tv, []):
                 if a.get("installed") is False or (a.get("id") or "") in SKIP_APPS or not a.get("name"):
                     continue
@@ -218,10 +249,12 @@ class Tvs:
         return self.ok and bool(self.tvs)
 
     def snapshot(self):
-        return {"available": self.available, "devices": [self._row(tv) for tv in C.TVS], "apps": self.app_names()}
+        return {"available": self.available, "devices": [self._row(tv) for tv in self.present], "apps": self.app_names()}
 
     # ---------- doing ----------
     def _need(self, tv):
+        if tv not in self.present:
+            raise Conflict(f"{self.names.get(tv, tv)} is not one of this house's TVs.")
         if not self.available:
             raise DeviceDown("tvs")
         t = self.tvs.get(tv)
@@ -267,10 +300,13 @@ class Tvs:
                                                           if a["on"] else None))
         elif action == "tv.volume":
             self._need_on(tv)
+            if a["delta"] == 0:
+                return
+            before = self._row(tv)["volume"]
             st, body = await self._post("/api/volume", {"tv": tv, "action": "up" if a["delta"] > 0 else "down",
                                                          "steps": abs(a["delta"])})
-            if a["delta"] != 0:
-                await self._check(st, body, tv)
+            await self._check(st, body, tv)
+            self._hint_volume(tv, before, a["delta"])
         elif action == "tv.mute":
             self._need_on(tv)
             cur = self._row(tv)["muted"]
@@ -295,6 +331,11 @@ class Tvs:
             if st == 404:
                 raise Conflict(f"Couldn't find {a['title']} to play.")
             await self._check(st, body, tv)
+        elif action == "tv.key":
+            self._need_on(tv)
+            st, body = await self._post("/api/key", {"tv": tv, "key": a["key"]})
+            await self._check(st, body, tv)
+            return                    # a key press changes nothing in the state worth reading at once
         elif action == "tv.art_mode":
             self._need(tv)
             row = self._row(tv)

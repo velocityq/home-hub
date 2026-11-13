@@ -103,7 +103,8 @@ async def transcribe(data: bytes, cfg: dict) -> tuple[str, dict]:
     tmp = tempfile.mkdtemp(prefix="hub-ask-stt-")         # mode 700
     src, wav = os.path.join(tmp, "in.audio"), os.path.join(tmp, "in.wav")
     try:
-        fd = os.open(src, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        # O_BINARY: on Windows os.open is text mode by default and would turn \n bytes into \r\n.
+        fd = os.open(src, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(data)
         try:

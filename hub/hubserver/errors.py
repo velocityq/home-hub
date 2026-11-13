@@ -15,6 +15,7 @@ DEVICE_DOWN_TEXT = {
     "aircon": "The aircon is not answering.",
     "speakers": "The speakers are not answering.",
     "tvs": "The TV bridge is not answering.",
+    "lights": "The lights are not answering.",
 }
 
 

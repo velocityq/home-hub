@@ -25,6 +25,24 @@ WALL_KEY = "wall-key-0123456789abcdef"
 MCP_KEY = "mcp-key-0123456789abcdef0"  # gitleaks:allow (a made up test key)
 
 
+def is_private(p, mode=0o600):
+    """True if only this user can open p: mode 600 (700 for a folder) on a Mac, and on Windows an ACL
+    with nothing inherited and every entry for this user or the machine itself (SYSTEM, Administrators,
+    OWNER RIGHTS, which Python adds to a mode 700 folder). Windows reports 0o666 for every file."""
+    p = str(p)
+    if os.name != "nt":
+        import stat
+        return stat.S_IMODE(os.stat(p).st_mode) == mode
+    import subprocess
+    out = subprocess.run(["icacls", p], capture_output=True, text=True, check=True).stdout
+    user = os.environ["USERNAME"].lower()
+    aces = [line.strip() for line in out.splitlines()[:-1] if line.strip()]
+    aces[0] = aces[0][len(p):].strip()             # the first line starts with the path itself
+    machine = ("nt authority\\system:", "builtin\\administrators:", "owner rights:")
+    return (any(user in a.lower() for a in aces)
+            and all((user in a.lower() or a.lower().startswith(machine)) and "(I)" not in a for a in aces))
+
+
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("HUB_HOME", str(tmp_path))

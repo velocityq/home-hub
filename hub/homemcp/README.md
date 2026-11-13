@@ -31,7 +31,14 @@ TV that is off or Spotify not linked), and a device that isn't answering (503).
 | `tv_mute` | `tv.mute` | Mutes or unmutes a TV |
 | `tv_open_app` | `tv.launch` | Opens an app by name |
 | `tv_play_title` | `tv.play` | Finds a show or film and plays it |
+| `tv_remote` | `tv.key` | Presses one remote button: arrows, OK, Back, Home, rewind, play/pause, fast forward |
 | `frame_art_mode` | `tv.art_mode` | Turns Art mode on or off on The Frame |
+| `light_power` | `lights.power` | Turns one light, or all of them, on or off |
+| `light_brightness` | `lights.brightness` | Sets a light's brightness, 10 to 100 percent |
+| `light_white` | `lights.white` | Sets a light to white, warm (2200 K) to daylight (6500 K) |
+| `light_color` | `lights.color` | Sets a light to a colour (`#rrggbb`) |
+| `light_schedule` | `lights.schedule` | Adds or changes a daily schedule: on or off at a time, with an optional fade |
+| `light_unschedule` | `lights.unschedule` | Removes a schedule |
 
 ## Settings (environment variables)
 

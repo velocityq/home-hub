@@ -18,13 +18,15 @@ THROTTLE = 0.25        # seconds between two state messages on the events socket
 BACKSTOP = 30          # seconds: send the state even if nothing seemed to change
 ACTION_TIMEOUT = 50    # seconds an action may take (a TV waking takes up to 32)
 
-DEVICE_OF = {"aircon": "aircon", "music": "speakers", "speakers": "speakers", "tv": "tvs"}
+DEVICE_OF = {"aircon": "aircon", "music": "speakers", "speakers": "speakers", "tv": "tvs", "lights": "lights"}
+NO_LIGHTS = {"available": False, "devices": []}
 
 
 class Hub:
-    def __init__(self, cfg, aircon, speakers, tvs, spotify=None):
+    def __init__(self, cfg, aircon, speakers, tvs, spotify=None, lights=None):
         self.cfg = cfg
         self.aircon, self.speakers, self.tvs, self.spotify = aircon, speakers, tvs, spotify
+        self.lights = lights            # None: this house has no lights set up
         self.sockets = set()
         self._dirty = False
         self._flush_handle = None
@@ -37,7 +39,7 @@ class Hub:
     async def start(self):
         self.loop = asyncio.get_running_loop()
         for name, dev in (("aircon", self.aircon), ("speakers", self.speakers), ("tvs", self.tvs),
-                          ("spotify", self.spotify)):
+                          ("spotify", self.spotify), ("lights", self.lights)):
             if dev is None:
                 continue
             try:
@@ -55,7 +57,7 @@ class Hub:
                 await ws.close()
             except Exception:
                 pass
-        for dev in (self.spotify, self.tvs, self.speakers, self.aircon):
+        for dev in (self.lights, self.spotify, self.tvs, self.speakers, self.aircon):
             if dev is None:
                 continue
             try:
@@ -79,6 +81,7 @@ class Hub:
                                                    "fan": None, "fan_speeds": [], "inside": None, "zones": []}),
             "speakers": part(self.speakers, "speakers", {"available": False, "devices": [], "groups": [],
                                                          "now": None, "spotify": {"linked": False}}),
+            "lights": part(self.lights, "lights", dict(NO_LIGHTS)) if self.lights is not None else dict(NO_LIGHTS),
             "tvs": part(self.tvs, "tvs", {"available": False, "devices": [], "apps": []}),
         }
 
@@ -131,7 +134,10 @@ class Hub:
             actions_log.info("action %s by %s -> 400 %s", action if isinstance(action, str) else "?", who, e)
             raise HubError(400, str(e)) from None
         dev = DEVICE_OF[name.split(".")[0]]
-        adapter = {"aircon": self.aircon, "speakers": self.speakers, "tvs": self.tvs}[dev]
+        adapter = {"aircon": self.aircon, "speakers": self.speakers, "tvs": self.tvs, "lights": self.lights}[dev]
+        if adapter is None:
+            actions_log.info("action %s by %s -> 409 (no lights set up)", name, who)
+            raise HubError(409, "This house has no lights set up.")
         started = time.monotonic()
         try:
             await asyncio.wait_for(adapter.do(name, clean), ACTION_TIMEOUT)

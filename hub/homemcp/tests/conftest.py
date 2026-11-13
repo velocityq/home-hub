@@ -6,6 +6,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from contextlib import asynccontextmanager
@@ -15,7 +16,7 @@ import pytest
 HUB_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, HUB_DIR)
 
-PY = os.path.join(HUB_DIR, ".venv", "bin", "python")
+PY = sys.executable                     # the venv's Python on a Mac or Windows
 FAKE_PORT = int(os.environ.get("HOMEMCP_TEST_PORT", "8796"))
 FAKE_URL = f"http://127.0.0.1:{FAKE_PORT}"
 KEY = "testkey"
@@ -87,7 +88,7 @@ async def connect(env: dict | None = None, mode: str = "auto", as_folder: bool =
     full_env = {k: v for k, v in full_env.items() if v is not None}
     if as_folder:
         params = StdioServerParameters(command=PY, args=[os.path.join(HUB_DIR, "homemcp")], env=full_env,
-                                       cwd=cwd or "/tmp")
+                                       cwd=cwd or tempfile.gettempdir())
     else:
         params = StdioServerParameters(command=PY, args=["-m", "homemcp"], env=full_env, cwd=cwd or HUB_DIR)
     async with Client(params, mode=mode, read_timeout_seconds=60) as client:

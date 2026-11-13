@@ -1,6 +1,6 @@
 """Where the hub keeps its files, its settings and its keys.
 
-~/.home-hub/            (HUB_HOME overrides, for tests)   mode 700
+~/.home-hub/            (HUB_HOME overrides, for tests)   mode 700 (on Windows: an ACL for this user only)
     config.json         non-secret settings, written with the defaults the first time
     keys.json           {"clients": {"wall": "...", "mcp": "...", "couch-tv": "..."}}  mode 600
                         (HUB_KEYS_FILE overrides)
@@ -74,13 +74,42 @@ def keys_path():
     return os.path.expanduser(os.environ.get("HUB_KEYS_FILE") or path("keys.json"))
 
 
+WINDOWS = os.name == "nt"
+
+
+def owner_only(p):
+    """Windows has no mode 600/700: drop inherited access and give only this user full control of p
+    (a folder's rule passes on to the files made in it). Does nothing elsewhere. Never raises."""
+    if not WINDOWS or not os.path.exists(p):
+        return
+    import subprocess
+    user = os.environ.get("USERNAME") or ""
+    if not user:
+        import getpass
+        user = getpass.getuser()
+    dom = os.environ.get("USERDOMAIN")
+    who = f"{dom}\\{user}" if dom else user
+    grant = f"{who}:(OI)(CI)F" if os.path.isdir(p) else f"{who}:F"
+    try:
+        r = subprocess.run(["icacls", p, "/inheritance:r", "/grant:r", grant],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode != 0:
+            log.warning("could not limit %s to this user (icacls %s)", os.path.basename(p), r.returncode)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("could not limit %s to this user (%s)", os.path.basename(p), type(e).__name__)
+
+
 def ensure_home():
     d = home_dir()
     os.makedirs(d, mode=0o700, exist_ok=True)
-    try:
-        os.chmod(d, 0o700)
-    except OSError:
-        pass
+    if WINDOWS:
+        owner_only(d)
+    else:
+        try:
+            os.chmod(d, 0o700)
+        except OSError:
+            pass
     os.makedirs(os.path.join(d, "logs"), mode=0o700, exist_ok=True)
     return d
 
@@ -99,11 +128,14 @@ def write_json(p, data, mode=0o600):
     os.makedirs(d, mode=0o700, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
     try:
-        os.fchmod(fd, mode)
+        if hasattr(os, "fchmod"):                    # not on Windows: there owner_only() below does it
+            os.fchmod(fd, mode)
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
         os.replace(tmp, p)
+        if WINDOWS and not mode & 0o077:
+            owner_only(p)
     except BaseException:
         try:
             os.unlink(tmp)
@@ -149,10 +181,13 @@ class Keys:
 
     def ensure(self):
         if os.path.exists(self.path):
-            try:
-                os.chmod(self.path, 0o600)
-            except OSError:
-                pass
+            if WINDOWS:
+                owner_only(self.path)
+            else:
+                try:
+                    os.chmod(self.path, 0o600)
+                except OSError:
+                    pass
             return
         ensure_home()
         clients = {name: secrets.token_urlsafe(32) for name in DEFAULT_CLIENTS}

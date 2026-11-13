@@ -26,11 +26,22 @@ from . import stt
 
 log = logging.getLogger("ask")
 
+def find_bin(name, mac_default):
+    """A program on PATH (whisper-cli.exe, ffmpeg.exe on Windows), else the Homebrew path on a Mac, else
+    the bare name. A program that is missing is fine: that part (voice, Claude) says it is not set up."""
+    found = shutil.which(name)
+    if found:
+        return found
+    if os.path.exists(mac_default):
+        return mac_default
+    return name
+
+
 DEFAULTS = {
-    "whisper_bin": "/opt/homebrew/bin/whisper-cli",
+    "whisper_bin": find_bin("whisper-cli", "/opt/homebrew/bin/whisper-cli"),
     "whisper_model": os.path.expanduser("~/.home-hub/models/ggml-small.en.bin"),
-    "ffmpeg_bin": "/opt/homebrew/bin/ffmpeg",
-    "claude_bin": shutil.which("claude") or "/opt/homebrew/bin/claude",
+    "ffmpeg_bin": find_bin("ffmpeg", "/opt/homebrew/bin/ffmpeg"),
+    "claude_bin": find_bin("claude", "/opt/homebrew/bin/claude"),
     "claude_model": "haiku",
     "claude_timeout": 25,
     "max_audio_bytes": 2 * 1024 * 1024,

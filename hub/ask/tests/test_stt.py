@@ -11,11 +11,12 @@ import pytest
 from ask import AskEngine
 from ask.stt import clean_transcript
 
-FFMPEG = "/opt/homebrew/bin/ffmpeg"
+FFMPEG = shutil.which("ffmpeg") or shutil.which("/opt/homebrew/bin/ffmpeg")
+WHISPER = shutil.which("whisper-cli") or shutil.which("/opt/homebrew/bin/whisper-cli")
 pytestmark = pytest.mark.skipif(
-    not (os.path.exists(FFMPEG) and os.path.exists("/opt/homebrew/bin/whisper-cli")
+    not (FFMPEG and WHISPER
          and os.path.exists(os.path.expanduser("~/.home-hub/models/ggml-small.en.bin")) and shutil.which("say")),
-    reason="needs macOS say, Homebrew ffmpeg and whisper-cpp, and ~/.home-hub/models/ggml-small.en.bin")
+    reason="needs macOS say, ffmpeg and whisper.cpp (whisper-cli), and ~/.home-hub/models/ggml-small.en.bin")
 
 # phrase, container, the action the fast path must choose
 CLIPS = [

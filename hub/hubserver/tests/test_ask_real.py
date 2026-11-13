@@ -12,10 +12,10 @@ import pytest
 
 from .conftest import WALL_KEY, auth, build, close
 
-WHISPER = "/opt/homebrew/bin/whisper-cli"
-FFMPEG = "/opt/homebrew/bin/ffmpeg"
+WHISPER = shutil.which("whisper-cli") or shutil.which("/opt/homebrew/bin/whisper-cli")
+FFMPEG = shutil.which("ffmpeg") or shutil.which("/opt/homebrew/bin/ffmpeg")
 MODEL = os.path.expanduser(os.environ.get("HUB_WHISPER_MODEL") or "~/.home-hub/models/ggml-small.en.bin")
-HAVE_STT = all(os.path.exists(p) for p in (WHISPER, FFMPEG, MODEL)) and shutil.which("say")
+HAVE_STT = bool(WHISPER and FFMPEG and os.path.exists(MODEL) and shutil.which("say"))
 
 
 def real_engine(get_state, run_action, config):

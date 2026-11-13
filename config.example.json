@@ -17,6 +17,10 @@
   },
   "inside_zone": "living",
   "tv_names": {"living-room": "Living Room", "bedroom": "Bedroom", "frame": "The Frame"},
+  "lights": [
+    {"id": "lamp", "name": "Lamp", "mac": "a8bb50000001", "ip": "192.0.2.50"}
+  ],
+  "lights_key": null,
   "cors_origins": [],
   "allowed_hosts": [],
   "people": ["Sam", "Alex"],
