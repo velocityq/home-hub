@@ -243,6 +243,22 @@ async def music_control(
     return await _act(f"music.{command}", {}, summary.music_summary)
 
 
+@tool("Music on a Spotify device")
+async def music_device(
+    device: Annotated[str, arg("The Spotify device's id, from house_status (Spotify's device list).", maxLength=80)],
+) -> CallToolResult:
+    """Move the music to one of the Spotify account's devices: a phone, computer, TV or speaker. Needs Spotify linked."""
+    return await _act("music.device", {"device": device}, summary.music_summary, done="Done. Moved the music.")
+
+
+@tool("Spotify device volume")
+async def music_volume(
+    value: Annotated[int, arg("Volume from 0 (silent) to 100 (loudest).", minimum=0, maximum=100)],
+) -> CallToolResult:
+    """Set the volume of the Spotify device the music is playing on. Needs Spotify linked."""
+    return await _act("music.volume", {"value": value}, summary.music_summary, done=f"Done. Volume set to {value}.")
+
+
 @tool("Music speakers")
 async def music_choose_speakers(
     speakers: Annotated[list[str], arg("One or more speaker ids to play on. " + SPEAKER_HELP,

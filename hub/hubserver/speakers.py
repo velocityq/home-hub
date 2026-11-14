@@ -32,12 +32,21 @@ class Speakers:
         self.names = {sid: cfg["speakers"].get(sid, {}).get("name", sid) for sid in C.SPEAKERS}
         self.cast_names = {sid: cfg["speakers"].get(sid, {}).get("cast", "") for sid in C.SPEAKERS}
         self.spotify_names = {sid: cfg["speakers"].get(sid, {}).get("spotify") for sid in C.SPEAKERS}
+        # "music": "spotify" in config.json: no Cast ceiling speakers in this house. The music card is Spotify
+        # itself: whatever is playing on the account, on any of its Spotify Connect devices (phone, computer,
+        # TV, speaker), and music.device moves it between them.
+        self.spotify_only = str(cfg.get("music") or "").lower() == "spotify"
 
     async def start(self):
-        await asyncio.to_thread(self.backend.start)
+        if not self.spotify_only:
+            await asyncio.to_thread(self.backend.start)
 
     async def stop(self):
-        await asyncio.to_thread(self.backend.stop)
+        if not self.spotify_only:
+            await asyncio.to_thread(self.backend.stop)
+
+    def _snap(self):
+        return {"speakers": {}, "groups": []} if self.spotify_only else self.backend.snapshot()
 
     # ---------- reading ----------
     def _groups(self, snap):
@@ -99,8 +108,8 @@ class Speakers:
         item, dev = p.get("item"), p.get("device") or {}
         if not item:
             return None
-        on = self._spotify_target(dev.get("name"), groups)
-        if not on:
+        on = [] if self.spotify_only else self._spotify_target(dev.get("name"), groups)
+        if on is None or (not on and not self.spotify_only):
             return None
         if item.get("type") == "episode":
             artist = (item.get("show") or {}).get("name")
@@ -120,10 +129,12 @@ class Speakers:
                 "art": imgs[0].get("url") if imgs else None,
                 "duration": int(dur / 1000) if dur else None, "position": int(pos / 1000) if pos is not None else None,
                 "playing": bool(p.get("is_playing")), "source": "spotify", "on": on,
-                "shuffle": bool(p.get("shuffle_state"))}
+                "shuffle": bool(p.get("shuffle_state")),
+                "device": {"id": dev.get("id"), "name": dev.get("name"), "type": (dev.get("type") or "").lower(),
+                           "volume": dev.get("volume_percent")} if dev.get("id") else None}
 
     def _now(self, snap=None):
-        snap = snap or self.backend.snapshot()
+        snap = snap or self._snap()
         groups = self._groups(snap)
         now = self._spotify_now(groups)
         if now is not None:
@@ -144,7 +155,11 @@ class Speakers:
                 "muted": row.get("muted") if row else None,
                 "in_use": bool((now and sid in now["on"]) or playing_here),
             })
-        return {"available": any(d["available"] for d in devices), "devices": devices,
+        if self.spotify_only:
+            sp = self.spotify
+            return {"available": bool(sp and sp.linked and not sp.last_error), "mode": "spotify", "devices": [],
+                    "groups": [], "now": now, "spotify": self._spotify_state()}
+        return {"available": any(d["available"] for d in devices), "devices": devices, "mode": "cast",
                 "groups": [{"id": g["id"], "name": g["name"], "members": g["members"]} for g in groups],
                 "now": now, "spotify": self._spotify_state()}
 
@@ -152,6 +167,7 @@ class Speakers:
         linked = bool(self.spotify and self.spotify.linked)
         out = {"linked": linked}
         if linked:
+            out["devices"] = [dict(d) for d in self.spotify.devs]
             q = self.spotify.quick
             out["playlists"] = q.get("playlists") or []
             last = q.get("last") or {}
@@ -161,6 +177,8 @@ class Speakers:
 
     # ---------- doing ----------
     def _need_any(self, snap):
+        if self.spotify_only:
+            return
         if not any(r.get("connected") for r in snap["speakers"].values()):
             raise DeviceDown("speakers")
 
@@ -219,8 +237,52 @@ class Speakers:
                 return
             await asyncio.sleep(0.15)
 
+    async def _play_here(self):
+        """Spotify-only: the device to start music on. The one playing now, else the last one used, else the
+        computer or phone Spotify lists first. 409 in plain words when there is none."""
+        p = await self.spotify.refresh_player()
+        dev = (p or {}).get("device") or {}
+        if dev.get("id"):
+            return dev["id"]
+        devs = await self.spotify.refresh_devices()
+        last = self.spotify.prefs().get("last_device")
+        pick = next((d for d in devs if d["id"] == last), None) or next(
+            (d for d in devs if d["type"] in ("computer", "smartphone")), None) or (devs[0] if devs else None)
+        if not pick:
+            raise Conflict("Spotify has nowhere to play. Open Spotify on your phone, computer or TV first.")
+        return pick["id"]
+
     async def do(self, action, a):
-        snap = self.backend.snapshot()
+        snap = self._snap()
+        if action in ("music.device", "music.volume"):
+            if not (self.spotify and self.spotify.linked):
+                raise NeedsSpotify("Spotify is not linked yet. Link it on this computer first.")
+            if action == "music.device":
+                devs = await self.spotify.refresh_devices()
+                d = next((x for x in devs if x["id"] == a["device"]), None)
+                if d is None:
+                    raise Conflict("Spotify can't see that device right now. Open Spotify on it, then try again.")
+                if d["restricted"]:
+                    raise Conflict(f"Spotify doesn't allow {d['name']} to be controlled from here.")
+                p = self.spotify.player or {}
+                if (p.get("device") or {}).get("id") == d["id"]:
+                    return
+                await self.spotify.transfer(d["id"], play=bool(p.get("is_playing")) or not p.get("item"))
+                self.spotify.save_prefs(last_device=d["id"])
+                await self._settle_spotify(lambda p: p and (p.get("device") or {}).get("id") == d["id"])
+                await self.spotify.refresh_devices()
+                return
+            p = await self.spotify.refresh_player()
+            dev = (p or {}).get("device") or {}
+            if not dev.get("id"):
+                raise NothingPlaying()
+            if dev.get("supports_volume") is False:
+                raise Conflict(f"{dev.get('name') or 'That device'} doesn't let Spotify change its volume.")
+            await self.spotify.volume(a["value"], dev["id"])
+            await self._settle_spotify(lambda p: p and ((p.get("device") or {}).get("volume_percent")) == a["value"], tries=4)
+            return
+        if self.spotify_only and action in ("speakers.volume", "music.speakers"):
+            raise Conflict("This house plays music through Spotify. Pick a Spotify device instead.")
         if action == "speakers.volume":
             self._need_any(snap)
             now, *_ = self._now(snap)
@@ -284,9 +346,12 @@ class Speakers:
                 raise NeedsSpotify("Spotify is not linked yet. Link it on the iMac to start music from here.")
             self._need_any(snap)
             now, uuid, snap, groups = self._now(snap)
-            speakers = a.get("speakers") or (now["on"] if now else None) or ["lounge-room"]
-            kind, target_uuid, names, label = self._target(speakers, groups, snap)
-            dev = await self._spotify_device(names, label)
+            if self.spotify_only:
+                dev = await self._play_here()
+            else:
+                speakers = a.get("speakers") or (now["on"] if now else None) or ["lounge-room"]
+                kind, target_uuid, names, label = self._target(speakers, groups, snap)
+                dev = await self._spotify_device(names, label)
             what = a["what"]
             ctx, uris = None, None
             if what == "playlist":
@@ -332,14 +397,15 @@ class Speakers:
                 raise NeedsSpotify("Spotify is not linked yet. Link it on the iMac to find music by name.")
             self._need_any(snap)
             now, uuid, snap, groups = self._now(snap)
-            speakers = a.get("speakers") or (now["on"] if now else None) or ["lounge-room"]
-            kind, target_uuid, names, label = self._target(speakers, groups, snap)
+            if not self.spotify_only:
+                speakers = a.get("speakers") or (now["on"] if now else None) or ["lounge-room"]
+                kind, target_uuid, names, label = self._target(speakers, groups, snap)
             res = await self.spotify.search(a["query"])
             pick = pick_result(a["query"], res)
             if not pick:
                 raise Conflict(f"Spotify found nothing for \"{a['query']}\".")
             what, uri, name = pick
-            dev = await self._spotify_device(names, label)
+            dev = await self._play_here() if self.spotify_only else await self._spotify_device(names, label)
             if what == "track":
                 await self.spotify.play(dev, uris=[uri])
             else:

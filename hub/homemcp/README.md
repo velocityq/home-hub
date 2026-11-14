@@ -33,6 +33,8 @@ TV that is off or Spotify not linked), and a device that isn't answering (503).
 | `tv_play_title` | `tv.play` | Finds a show or film and plays it |
 | `tv_remote` | `tv.key` | Presses one remote button: arrows, OK, Back, Home, rewind, play/pause, fast forward |
 | `frame_art_mode` | `tv.art_mode` | Turns Art mode on or off on The Frame |
+| `music_device` | `music.device` | Moves the music to one of the Spotify account's devices |
+| `music_volume` | `music.volume` | Sets the volume of the Spotify device that is playing |
 | `light_power` | `lights.power` | Turns one light, or all of them, on or off |
 | `light_brightness` | `lights.brightness` | Sets a light's brightness, 10 to 100 percent |
 | `light_white` | `lights.white` | Sets a light to white, warm (2200 K) to daylight (6500 K) |

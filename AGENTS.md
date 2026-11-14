@@ -30,7 +30,8 @@ showing you the wall screen with pretend devices first. It touches nothing in yo
 ## 2. Ask
 
 1. Which of these do you have: an AirTouch 5 aircon console, Google Cast speakers (Nest, Chromecast
-   built in), TVs that couch-tv runs, WiZ lights? Each is optional. (WiZ lights go in `"lights"` in
+   built in), TVs that couch-tv runs, WiZ lights? Each is optional. (No Cast speakers but Spotify Premium: set
+   `"music": "spotify"` in `config.json` and the music card follows their Spotify account on any of its devices.) (WiZ lights go in `"lights"` in
    `config.json`, each with an id, a name, its mac and its address; with lights and no aircon, the wall shows
    Lighting where the aircon would be. If a bulb answers a change with "Invalid params", its firmware wants
    signed changes: they choose "Allow all controls" under Settings, Security, Allow local communication in the

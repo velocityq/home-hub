@@ -403,7 +403,13 @@ def make_app(hub, keys, cfg, wall_dir=WALL_DIR, ask_factory=None, personal=None)
         if request.remote not in LOCAL:
             return err(403, "Link Spotify on the iMac itself.")
         origin = request.headers.get("Origin")
-        if origin and not re.match(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$", origin):
+        # This page is sent with Referrer-Policy: no-referrer, so a browser posts its own form with "Origin: null".
+        # That is allowed only when the browser also says the post came from this same site (Sec-Fetch-Site),
+        # so another web page open on this computer still cannot post here.
+        same_site = request.headers.get("Sec-Fetch-Site") in ("same-origin", None)
+        if origin == "null" and not same_site:
+            return err(403, "Not from this page.")
+        if origin and origin != "null" and not re.match(r"^http://(127\.0\.0\.1|localhost)(:\d+)?$", origin):
             return err(403, "Not from this page.")
         form = await request.post()
         cid = str(form.get("client_id") or "").strip()

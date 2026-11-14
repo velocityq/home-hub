@@ -152,19 +152,44 @@ class Fake:
         elif action == "music.start":
             if not sp["spotify"]["linked"]:
                 raise NeedsSpotify()
-            on = a.get("speakers") or (sp["now"] or {}).get("on") or ["lounge-room"]
+            on = [] if sp.get("mode") == "spotify" else a.get("speakers") or (sp["now"] or {}).get("on") or ["lounge-room"]
             sp["now"] = {"title": "Started from the wall", "artist": "Various", "album": None, "art": None,
-                         "duration": 200, "position": 0, "playing": True, "source": "spotify", "on": on}
+                         "duration": 200, "position": 0, "playing": True, "source": "spotify", "on": on,
+                         "device": _fake_device(sp)}
             for d in sp["devices"]:
                 d["in_use"] = d["id"] in on
         elif action == "music.search_play":
             if not sp["spotify"]["linked"]:
                 raise NeedsSpotify()
-            on = a.get("speakers") or (sp["now"] or {}).get("on") or ["lounge-room"]
+            on = [] if sp.get("mode") == "spotify" else a.get("speakers") or (sp["now"] or {}).get("on") or ["lounge-room"]
             sp["now"] = {"title": f"Top result for {a['query']}", "artist": "Various", "album": None, "art": None,
-                         "duration": 200, "position": 0, "playing": True, "source": "spotify", "on": on}
+                         "duration": 200, "position": 0, "playing": True, "source": "spotify", "on": on,
+                         "device": _fake_device(sp)}
             for d in sp["devices"]:
                 d["in_use"] = d["id"] in on
+        elif action == "music.device":
+            if not sp["spotify"]["linked"]:
+                raise NeedsSpotify()
+            devs = sp["spotify"].get("devices") or []
+            d = next((x for x in devs if x["id"] == a["device"]), None)
+            if d is None:
+                raise NoLight("Spotify can't see that device right now. Open Spotify on it, then try again.")
+            for x in devs:
+                x["active"] = x is d
+            if sp["now"] is not None:
+                sp["now"]["device"] = {k: d[k] for k in ("id", "name", "type", "volume")}
+        elif action == "music.volume":
+            if not sp["spotify"]["linked"]:
+                raise NeedsSpotify()
+            dev = (sp["now"] or {}).get("device")
+            if not dev:
+                raise NothingPlaying()
+            dev["volume"] = a["value"]
+            for x in sp["spotify"].get("devices") or []:
+                if x["id"] == dev["id"]:
+                    x["volume"] = a["value"]
+        elif sp.get("mode") == "spotify" and action in ("speakers.volume", "music.speakers"):
+            raise NoLight("This house plays music through Spotify. Pick a Spotify device instead.")
         elif action == "speakers.volume":
             for d in sp["devices"]:
                 if a["speaker"] == d["id"] or (a["speaker"] == "all" and d["in_use"]):
@@ -195,6 +220,31 @@ class Fake:
                     t["art_mode"] = a["on"]
                 elif action == "tv.key" and a["key"] == "home":
                     t["app"] = "Home"
+
+
+FAKE_DEVICES = [  # made up Spotify Connect devices, shown once Spotify is linked
+    {"id": "fakedevicephone01", "name": "Phone", "type": "smartphone", "active": False, "volume": 70, "restricted": False},
+    {"id": "fakedevicedesk002", "name": "Desk computer", "type": "computer", "active": True, "volume": 45, "restricted": False},
+    {"id": "fakedevicetv00003", "name": "Living Room TV", "type": "tv", "active": False, "volume": 30, "restricted": False},
+]
+
+
+def _fake_device(sp):
+    d = next((x for x in sp["spotify"].get("devices") or [] if x["active"]), None)
+    return {k: d[k] for k in ("id", "name", "type", "volume")} if d else None
+
+
+def spotify_mode(state):
+    """The state of a house with no Cast speakers ("music": "spotify"): Spotify on the account's own devices."""
+    sp = state["speakers"]
+    sp.update(mode="spotify", devices=[], groups=[])
+    sp["spotify"] = {"linked": True, "last": "Holocene · Bon Iver", "devices": copy.deepcopy(FAKE_DEVICES),
+                     "playlists": [{"id": "37i9dQZF1DXcBWIGoYBM5M", "name": "Today's Top Hits"},
+                                   {"id": "37i9dQZF1DX4WYpdgoIcn6", "name": "Chill Hits"}]}
+    if sp["now"] is not None:
+        sp["now"]["on"] = []
+        sp["now"]["device"] = _fake_device(sp)
+    return state
 
 
 class DeviceDown(Exception):
@@ -473,6 +523,7 @@ def make_app(keys, wall_dir=None, cors=(), people=None, place=PLACE):
             for d in fake.state["speakers"]["devices"]:
                 d["in_use"] = False
         if sp["linked"]:
+            sp.setdefault("devices", copy.deepcopy(FAKE_DEVICES))
             sp["last"] = "Holocene · Bon Iver"
             sp["playlists"] = [{"id": "37i9dQZF1DXcBWIGoYBM5M", "name": "Today's Top Hits"}, {"id": "37i9dQZF1DX4WYpdgoIcn6", "name": "Chill Hits"},
                                {"id": "37i9dQZF1DWXRqgorJj26U", "name": "Rock Classics"}, {"id": "37i9dQZF1DX0XUsuxWHRQd", "name": "RapCaviar"},
@@ -519,8 +570,13 @@ def main():
     ap.add_argument("--key", action="append", default=[], help="a client key (repeat for more)")
     ap.add_argument("--wall", help="serve this folder as the wall screen at /")
     ap.add_argument("--cors", action="append", default=[], help="an origin allowed to call the hub from a browser")
+    ap.add_argument("--music", choices=["cast", "spotify"], default="cast",
+                    help="spotify: a house with no Cast speakers, music on the Spotify account's own devices")
     a = ap.parse_args()
-    web.run_app(make_app(a.key or ["testkey"], a.wall, a.cors), host=a.host, port=a.port, print=lambda *_: print(
+    app = make_app(a.key or ["testkey"], a.wall, a.cors)
+    if a.music == "spotify":
+        spotify_mode(app["fake"].state)
+    web.run_app(app, host=a.host, port=a.port, print=lambda *_: print(
         f"fake hub on http://{a.host}:{a.port}  keys: {', '.join(a.key or ['testkey'])}", flush=True))
 
 

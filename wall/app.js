@@ -28,6 +28,8 @@ const I = {
   chev: '<path d="M9 5l7 7-7 7"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
   bulb: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>',
   remote: '<rect x="7" y="2.5" width="10" height="19" rx="3"/><circle cx="12" cy="8" r="2"/><path d="M10 13.5h4M10 16.5h4"/>',
   back: '<path d="M9 6l-5 5 5 5"/><path d="M4 11h11a5 5 0 0 1 0 10h-3"/>',
@@ -121,6 +123,15 @@ function optimistic(v, action, a) {
     case "speakers.volume":
       sp.devices.forEach((d) => { if (d.id === a.speaker || (a.speaker === "all" && d.in_use)) d.volume = a.value; });
       break;
+    case "music.device": {
+      const d = ((sp.spotify && sp.spotify.devices) || []).find((x) => x.id === a.device);
+      if (d) {
+        sp.spotify.devices.forEach((x) => { x.active = x.id === a.device; });
+        if (sp.now) sp.now.device = { id: d.id, name: d.name, type: d.type, volume: d.volume };
+      }
+      break;
+    }
+    case "music.volume": if (sp.now && sp.now.device) sp.now.device.volume = a.value; break;
     case "tv.power": { const t = tv(); if (a.on) { if (t.power !== "on") t.waking = true; } else { t.power = "off"; t.waking = false; } break; }
     case "tv.volume": { const t = tv(); t.volume = Math.max(0, Math.min(100, (t.volume || 0) + a.delta)); t.muted = false; break; }
     case "tv.mute": tv().muted = a.muted; break;
@@ -186,7 +197,17 @@ const spDevices = (sp) => sp.devices || [];
 const spName = (sp, id) => (spDevices(sp).find((d) => d.id === id) || { name: id }).name;
 const nowOf = (sp) => (sp && sp.now) || null;
 const playing = (sp) => !!(nowOf(sp) && nowOf(sp).playing);
-const groupText = (sp) => { const n = nowOf(sp); return n && n.on && n.on.length ? n.on.map((id) => spName(sp, id)).join(" + ") : "No speaker picked"; };
+const groupText = (sp) => {
+  const n = nowOf(sp);
+  if (spMode(sp)) return n && n.device ? n.device.name : "No device";
+  return n && n.on && n.on.length ? n.on.map((id) => spName(sp, id)).join(" + ") : "No speaker picked";
+};
+// A house with no Cast speakers ("music": "spotify" on the hub): the music card is the Spotify account itself, on
+// whichever of its devices (phone, computer, TV, speaker) is playing.
+const spMode = (sp) => !!(sp && sp.mode === "spotify");
+const spDevs = (sp) => (sp && sp.spotify && sp.spotify.devices) || [];
+const DEV_ICON = { smartphone: "phone", computer: "laptop", tv: "tv", speaker: "speaker", castaudio: "speaker", avr: "speaker", tablet: "phone" };
+const devIcon = (d) => DEV_ICON[(d && d.type) || ""] || "speaker";
 const tvList = (tvs) => tvs.devices || [];
 const tvShort = (t) => t.name.replace(/^The /, "").replace(/ Room$/, "");
 const tvIcon = (t) => (t.kind === "samsung" || t.art_mode != null ? "frame" : "tv");
@@ -389,22 +410,35 @@ function quickMusic(sp) {
     ${goBtn(sp, true)}
     <div class="lists">${plBtns(sp)}</div>`;
 }
+// The music card when the house plays through Spotify and Spotify is not linked, or not answering.
+function spDownCard(style, src) {
+  const sp = SP();
+  if (spMode(sp) && !linkedSp(sp)) {
+    return `<div class="card col" data-card="music" data-open="music" data-src="${src}" style="${style}">
+      <div class="row" style="height:40px">${spLogo(34)}</div>
+      <div class="hint" style="margin-top:auto">Link your Spotify account on the hub computer. Tap for how.</div></div>`;
+  }
+  return `<div class="card col" data-card="music" style="${style};justify-content:center">${down(spMode(sp) ? "Spotify not answering" : "Speakers not answering",
+    spMode(sp) ? "The hub keeps trying. Check this computer is online." : undefined)}</div>`;
+}
+const readyText = (sp) => (spMode(sp) ? `${spDevs(sp).length} Spotify device${spDevs(sp).length === 1 ? "" : "s"}` : `${spDevices(sp).length} speakers ready`);
+const idleHint = (sp) => (spMode(sp) ? "Open Spotify on your phone or computer, or pick music here." : "Start Spotify on a phone and pick a ceiling speaker. It shows up here.");
 function musicCardA() {
   const sp = SP();
   if (!S.view) return `<div class="card col" style="flex:1.08;padding:20px 22px">${waitCard("Music")}</div>`;
   if (!sp) return "";
-  if (!sp.available) return `<div class="card col" data-card="music" style="flex:1.08;padding:20px 22px;justify-content:center">${down("Speakers not answering")}</div>`;
+  if (!sp.available) return spDownCard("flex:1.08;padding:20px 22px", "a-music");
   const n = nowOf(sp);
   if (!n) {
     return `<div class="card col" data-card="music" data-open="music" data-src="a-music" style="flex:1.08;padding:20px 22px">
       <div class="row"><div class="art empty">${svg("note")}</div>
-        <div class="col grow"><div class="title">Nothing playing</div><div class="sub">${spDevices(sp).length} speakers ready</div></div>${spIcon(34)}</div>
-      ${linkedSp(sp) ? `<div style="margin-top:auto">${goBtn(sp, false)}</div>` : `<div class="hint" style="margin-top:auto">Start Spotify on a phone and pick a ceiling speaker. It shows up here.</div>`}</div>`;
+        <div class="col grow"><div class="title">Nothing playing</div><div class="sub">${readyText(sp)}</div></div>${spIcon(34)}</div>
+      ${linkedSp(sp) ? `<div style="margin-top:auto">${goBtn(sp, false)}</div>` : `<div class="hint" style="margin-top:auto">${idleHint(sp)}</div>`}</div>`;
   }
   return `<div class="card col" data-card="music" data-open="music" data-src="a-music" style="flex:1.08;padding:20px 22px">
       <div class="row"><div class="art" style="${artBg(n)}"></div>
         <div class="col grow"><div class="title ellip">${esc(n.title)}</div><div class="sub ellip">${esc(n.artist)}</div>
-        <div class="sub ellip" style="margin-top:2px">${lineIcon("group", 15)} ${esc(groupText(sp))}</div></div>${spIcon(34)}</div>
+        <div class="sub ellip" style="margin-top:2px">${lineIcon(spMode(sp) ? devIcon(n.device) : "group", 15)} ${esc(groupText(sp))}</div></div>${spIcon(34)}</div>
       <div class="row grow" style="gap:14px;margin-top:10px">
         ${playBtn()}<button class="btn round fill" data-do="next" aria-label="Next song">${svg("next")}</button>${prog()}</div>
     </div>`;
@@ -459,17 +493,17 @@ function layoutB() {
         <div class="col grow"><div style="font-size:16px;font-weight:600">${zonesOn(ac)} of ${zones(ac).length} rooms on</div><div class="sub ellip" style="font-size:14px">${onRooms}</div></div>
         <div class="sub row" style="gap:2px;font-weight:600">Rooms ${lineIcon("chev", 18)}</div></div></div>`;
     }
-    if (sp && !sp.available) music = `<div class="card col" data-card="music" style="padding:18px 22px;height:192px;justify-content:center">${down("Speakers not answering")}</div>`;
+    if (sp && !sp.available) music = spDownCard("padding:18px 22px;height:192px", "b-music");
     else if (sp && !nowOf(sp)) {
       music = `<div class="card col" data-card="music" data-open="music" data-src="b-music" style="padding:18px 22px;height:192px">
-      <div class="row"><div class="art empty">${svg("note")}</div><div class="col grow"><div class="title">Nothing playing</div><div class="sub">${spDevices(sp).length} speakers ready</div></div>${spIcon(34)}</div>
-      ${linkedSp(sp) ? `<div style="margin-top:auto">${goBtn(sp, false)}</div>` : `<div class="hint" style="margin-top:auto">Start Spotify on a phone and pick a ceiling speaker. It shows up here.</div>`}</div>`;
+      <div class="row"><div class="art empty">${svg("note")}</div><div class="col grow"><div class="title">Nothing playing</div><div class="sub">${readyText(sp)}</div></div>${spIcon(34)}</div>
+      ${linkedSp(sp) ? `<div style="margin-top:auto">${goBtn(sp, false)}</div>` : `<div class="hint" style="margin-top:auto">${idleHint(sp)}</div>`}</div>`;
     } else if (sp) {
       const n = nowOf(sp);
       music = `<div class="card col" data-card="music" data-open="music" data-src="b-music" style="padding:18px 22px;height:192px">
       <div class="row"><div class="art" style="${artBg(n)}"></div><div class="col grow"><div class="title ellip">${esc(n.title)}</div><div class="sub ellip">${esc(n.artist)} · ${esc(groupText(sp))}</div></div>${spIcon(34)}</div>
       <div class="row" style="gap:12px;margin-top:auto">${playBtn()}<button class="btn round fill" data-do="next" aria-label="Next song">${svg("next")}</button>
-        ${prog()}<div class="btn round">${svg("group")}</div></div></div>`;
+        ${prog()}<div class="btn round">${svg(spMode(sp) ? devIcon(n.device) : "group")}</div></div></div>`;
     }
     if (tvs && !tvs.available) tvCard = `<div class="card col" data-card="tvs" style="padding:14px 22px;flex:1;justify-content:center">${down("TVs not answering")}</div>`;
     else if (tvs) {
@@ -522,7 +556,22 @@ function layoutC() {
                        extra: `<div class="row" style="gap:8px">${small("nudge", -1, "−", "Cooler")}${small("nudge", 1, "+", "Warmer")}</div>` });
       climate += zones(ac).map((z) => tile({ name: z.name, status: `${fmtT(z.temp)}°${z.on ? " · On" : ""}`, icon: "room", on: z.on, color: "cool", do: "zone", arg: z.id })).join("");
     }
-    if (sp && !sp.available) { pills += downPill("warn", "Speakers not answering"); media += `<div class="card" data-card="music" style="grid-column:span 4;padding:14px 18px;border-radius:20px">${down("Speakers not answering")}</div>`; }
+    if (sp && spMode(sp) && (!sp.available || !linkedSp(sp))) {
+      pills += downPill("warn", linkedSp(sp) ? "Spotify not answering" : "Spotify not linked");
+      media += tile({ name: "Spotify", status: linkedSp(sp) ? "Not answering" : "Not linked yet · tap for how", icon: "note", on: false,
+                      color: "green", wide: true, open: "music", src: "c-spotify" });
+    }
+    else if (sp && spMode(sp)) {
+      const n = nowOf(sp);
+      pills += pill("music", "note", n && n.playing ? "green" : "off", n ? `Spotify · ${n.playing ? "Playing" : "Paused"}` : "Spotify · Nothing playing", n && n.playing);
+      media += tile({ name: n ? n.title : "Spotify", status: n ? `${n.playing ? "Playing" : "Paused"} on ${groupText(sp)}` : "Nothing playing", icon: "note",
+                      on: !!(n && n.playing), color: "green", wide: true, open: "music", src: "c-spotify",
+                      extra: n ? `<button class="btn round fill hit8" data-do="playPause" aria-label="${n.playing ? "Pause" : "Play"}" style="height:40px;min-width:40px;width:40px;background:#111;color:#fff">${svg(n.playing ? "pause" : "play")}</button>` : "" });
+      const nd = spDevs(sp).length;
+      media += tile({ name: n && n.device ? n.device.name : "Devices", status: n && n.device ? (n.playing ? "Playing here" : "Selected") : `${nd} Spotify device${nd === 1 ? "" : "s"}`,
+                      icon: n && n.device ? devIcon(n.device) : "speaker", on: !!(n && n.playing), color: "green", wide: true, open: "music", src: "c-spdev" });
+    }
+    else if (sp && !sp.available) { pills += downPill("warn", "Speakers not answering"); media += `<div class="card" data-card="music" style="grid-column:span 4;padding:14px 18px;border-radius:20px">${down("Speakers not answering")}</div>`; }
     else if (sp) {
       const n = nowOf(sp);
       pills += pill("music", "speaker", n ? "warm" : "off", n ? `Speakers · ${playing(sp) ? n.on.length + " playing" : "Paused"}` : "Speakers · Nothing playing");
@@ -545,7 +594,7 @@ function layoutC() {
   <div class="row" style="position:absolute;left:24px;bottom:318px;gap:10px;align-items:flex-end">${pills}</div>
   <div class="talk" style="position:absolute;right:24px;bottom:318px">${kbdBtn()}${micBtn()}</div>
   <div style="position:absolute;left:24px;right:24px;bottom:24px;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));grid-template-rows:auto 100px auto 100px;gap:10px">
-    ${head(S.view && litUp() ? "Lighting" : "Climate")}${climate}${head("Speakers and TVs")}${media}</div>`;
+    ${head(S.view && litUp() ? "Lighting" : "Climate")}${climate}${head(spMode(sp) ? "Music and TVs" : "Speakers and TVs")}${media}</div>`;
 }
 
 // ---------- the expanded sheets ----------
@@ -597,6 +646,27 @@ function spkRows(sp, n) {
     </div>`;
   }).join("");
 }
+// Spotify mode: the account's devices, the one playing first-class, a tap moves the music there.
+function devRows(sp) {
+  const n = nowOf(sp), devs = spDevs(sp);
+  if (!devs.length) return `<div class="hint" style="font-size:17px">Spotify can't see any devices right now. Open Spotify on your phone, computer or TV and it shows up here.</div>`;
+  return devs.map((d) => {
+    const here = !!(n && n.device && n.device.id === d.id) || (!n && d.active);
+    const status = d.restricted ? "Can't be controlled from here" : here ? (n && n.playing ? "Playing here" : "Selected") : "Tap to play here";
+    return `<button class="spk devrow ${here ? "here" : ""}" data-do="spDevice" data-arg="${esc(d.id)}" ${d.restricted ? "disabled" : ""} style="text-align:left;${d.restricted ? "opacity:.55" : ""}">
+      <div class="ic ${here ? "green" : "off"}" style="width:44px;height:44px">${svg(devIcon(d))}</div>
+      <div class="col grow" style="min-width:0"><div style="font-size:19px;font-weight:600" class="ellip">${esc(d.name)}</div>
+        <div class="sub" style="font-size:14px">${status}</div></div>
+      ${d.volume != null ? `<span class="sub" style="font-size:15px">${lineIcon("speaker", 16)} ${d.volume}</span>` : ""}</button>`;
+  }).join("");
+}
+function spotifyLinkHelp() {
+  return `<div class="col" style="gap:14px;max-width:640px">${spLogo(40)}
+    <div style="font-size:22px;font-weight:700">Link your Spotify account</div>
+    <div class="sub" style="font-size:17px;line-height:1.5">This is done once, on the computer the hub runs on (not on this tablet). On that computer, open
+      <b>http://127.0.0.1:8790/spotify/login</b> in a browser and follow the page. It needs Spotify Premium.</div>
+    <div class="sub" style="font-size:15px">After that, your songs, playlists and devices show up here.</div></div>`;
+}
 function spotifyNote(sp) {
   if (!sp.spotify || sp.spotify.linked) return "";
   return `<div class="notice">${svg("link")}<span>Spotify is not linked yet. Link Spotify on the iMac so the hub can move songs and find music.</span></div>`;
@@ -610,7 +680,7 @@ const M = { tab: "home", lib: null, loading: false, err: null, q: "", res: null,
 const okImg = (u) => typeof u === "string" && /^https:\/\/[a-z0-9.-]+\.(scdn\.co|spotifycdn\.com)\//i.test(u);
 const imgDiv = (u, cls, inner) => `<div class="${cls}" ${okImg(u) ? `style="background-image:url('${esc(u.replace(/["'\\()\s<>]/g, encodeURIComponent))}')"` : ""}>${inner || ""}</div>`;
 const MTABS = [["home", "Home"], ["search", "Search"], ["playlists", "Playlists"], ["speakers", "Speakers"]];
-const mTabs = () => MTABS.map(([k, t]) => `<button class="pill ${M.tab === k ? "sel" : ""}" data-do="mTab" data-arg="${k}" style="height:56px;padding:0 24px;font-size:18px">${t}</button>`).join("");
+const mTabs = () => MTABS.map(([k, t]) => [k, k === "speakers" && spMode(SP()) ? "Devices" : t]).map(([k, t]) => `<button class="pill ${M.tab === k ? "sel" : ""}" data-do="mTab" data-arg="${k}" style="height:56px;padding:0 24px;font-size:18px">${t}</button>`).join("");
 async function hubGet(path) {
   try {
     const r = await fetch(HUB + path, { headers: auth() });
@@ -687,7 +757,7 @@ function mBrowse() {
   const sp = SP();
   if (M.tab === "search") return mSearch();
   if (M.tab === "playlists") return mPlaylists();
-  if (M.tab === "speakers") return `<div class="col" style="gap:10px">${spkRows(sp, nowOf(sp))}</div>`;
+  if (M.tab === "speakers") return `<div class="col" style="gap:10px">${spMode(sp) ? devRows(sp) : spkRows(sp, nowOf(sp))}</div>`;
   return mHome(sp);
 }
 function mNow(sp) {
@@ -695,29 +765,39 @@ function mNow(sp) {
   if (!n) {
     return `<div class="bigart empty">${spIcon(110)}</div>
       <div><div style="font-size:28px;font-weight:700">Nothing playing</div>
-      <div class="hint" style="font-size:17px;margin-top:6px">Tap Liked Songs, a playlist or a search result. It plays on the speakers picked below.</div></div>`;
+      <div class="hint" style="font-size:17px;margin-top:6px">Tap Liked Songs, a playlist or a search result. It plays on the ${spMode(sp) ? "device" : "speakers"} picked below.</div></div>
+      ${spMode(sp) && linkedSp(sp) ? goBtn(sp, true) : ""}`;
   }
   const inUse = spDevices(sp).filter((d) => n.on.includes(d.id));
-  const allVol = inUse.length ? Math.round(inUse.reduce((a, d) => a + (d.volume || 0), 0) / inUse.length) : 0;
+  const devVol = spMode(sp) && n.device && n.device.volume != null ? n.device.volume : null;
+  const allVol = spMode(sp) ? (devVol || 0) : inUse.length ? Math.round(inUse.reduce((a, d) => a + (d.volume || 0), 0) / inUse.length) : 0;
   const p = posNow();
   return `<div class="bigart" style="${artBg(n)}"></div>
     <div><div style="font-size:26px;font-weight:700" class="ellip">${esc(n.title)}</div><div class="sub ellip" style="font-size:18px">${esc(n.artist)}</div></div>
+    ${spMode(sp) && n.device ? `<button class="devline" data-do="mTab" data-arg="speakers" aria-label="Choose where it plays">${lineIcon(devIcon(n.device), 18)}<span class="ellip">${n.playing ? "Playing" : "Paused"} on ${esc(n.device.name)}</span></button>` : ""}
     ${n.duration ? `<div>${prog(8)}<div class="row sub" style="justify-content:space-between;font-size:14px;margin-top:6px"><span data-pos>${p != null ? mmss(p) : ""}</span><span>${mmss(n.duration)}</span></div></div>` : ""}
     <div class="row" style="justify-content:center;gap:10px">
       ${linkedSp(sp) ? `<button class="btn round ${n.shuffle ? "green" : "fill"}" data-do="shuffle" aria-label="Shuffle ${n.shuffle ? "on" : "off"}" style="width:56px;height:56px">${svg("shuffle")}</button>` : ""}
       <button class="btn round fill" data-do="prev" aria-label="Previous song" style="width:60px;height:60px">${svg("prev")}</button>
       <button class="btn round fill white" data-do="playPause" aria-label="${n.playing ? "Pause" : "Play"}" style="width:80px;height:80px;border-radius:40px">${svg(n.playing ? "pause" : "play")}</button>
       <button class="btn round fill" data-do="next" aria-label="Next song" style="width:60px;height:60px">${svg("next")}</button></div>
-    <div class="row"><span class="ic off" style="width:30px;height:30px;flex:none">${svg("speaker")}</span><input type="range" min="0" max="100" value="${allVol}" data-vol="all" aria-label="Volume" style="--p:${allVol}%"></div>`;
+    <div class="row"><span class="ic off" style="width:30px;height:30px;flex:none">${svg(spMode(sp) ? devIcon(n.device) : "speaker")}</span><input type="range" min="0" max="100" value="${allVol}" data-vol="${spMode(sp) ? "spotify" : "all"}" aria-label="Volume" style="--p:${allVol}%" ${spMode(sp) && devVol == null ? "disabled" : ""}></div>`;
 }
 function mPlayOn(sp) {
+  if (spMode(sp)) {
+    const n = nowOf(sp), cur = n && n.device ? n.device.id : (spDevs(sp).find((d) => d.active) || {}).id;
+    return `<span class="label" style="flex:none">Play on</span>` + (spDevs(sp).map((d) =>
+      `<button class="pill ${d.id === cur ? "sel" : ""}" data-do="spDevice" data-arg="${esc(d.id)}" ${d.restricted ? "disabled" : ""} style="height:52px;font-size:17px;flex:none">${lineIcon(devIcon(d), 18)} ${esc(d.name)}</button>`).join("")
+      || `<span class="sub">Open Spotify on a phone or computer</span>`);
+  }
   const n = nowOf(sp), on = n ? n.on : pickList(sp);
   return `<span class="label" style="flex:none">Play on</span>` + spDevices(sp).map((d) =>
     `<button class="pill ${on.includes(d.id) ? "sel" : ""}" data-do="chipSpk" data-arg="${esc(d.id)}" ${d.available ? "" : "disabled"} style="height:52px;font-size:17px">${esc(d.name)}</button>`).join("");
 }
 function sheetMusic() {
   const sp = SP();
-  if (!sp || !sp.available) return `<div style="padding-right:76px"><h2>Music</h2></div><div style="margin-top:30px">${down("Speakers not answering")}</div>`;
+  if (spMode(sp) && !linkedSp(sp)) return `<div style="padding-right:76px">${spotifyLinkHelp()}</div>`;
+  if (!sp || !sp.available) return `<div style="padding-right:76px"><h2>Music</h2></div><div style="margin-top:30px">${down(spMode(sp) ? "Spotify not answering" : "Speakers not answering")}</div>`;
   const linked = linkedSp(sp);
   if (!linked) {                                      // Cast only: the controls and speakers, and a note about linking
     const n = nowOf(sp);
@@ -978,6 +1058,8 @@ function describe(action, a) {
     case "lights.brightness": return `${liName(a.light)} at ${a.value}%`;
     case "lights.white": return `${liName(a.light)} white`;
     case "lights.color": return `${liName(a.light)} colour changed`;
+    case "music.device": return `Music moved to ${((spDevs(SP()).find((d) => d.id === a.device)) || { name: "that device" }).name}`;
+    case "music.volume": return `Volume ${a.value}`;
     case "lights.schedule": return `${liName(a.light)} schedule saved`;
     case "lights.unschedule": return `${liName(a.light)} schedule removed`;
     default: return String(action || "Something");
@@ -1389,7 +1471,7 @@ const DO = {
   musicStart: (arg) => {
     const sp = SP(); if (!sp || S.starting) return;
     const [what, id] = String(arg || "recent").split(":");
-    const args = { what, speakers: pickList(sp) };
+    const args = spMode(sp) ? { what } : { what, speakers: pickList(sp) };
     if (what === "playlist") args.playlist = id;
     S.starting = true; render();
     act("music.start", args).finally(() => { S.starting = false; render(); });
@@ -1398,7 +1480,7 @@ const DO = {
   mPlayUri: (uri) => {
     const sp = SP(); if (!sp || S.starting) return;
     S.starting = true; render();
-    act("music.start", { what: "uri", uri, speakers: pickList(sp) }).finally(() => { S.starting = false; render(); });
+    act("music.start", spMode(sp) ? { what: "uri", uri } : { what: "uri", uri, speakers: pickList(sp) }).finally(() => { S.starting = false; render(); });
   },
   mClear: () => { M.q = ""; M.res = null; M.seq++; const i = $("#msearch"); if (i) { i.value = ""; i.focus(); } renderBrowse(); },
   mPickMain: () => { M.pickMain = !M.pickMain; M.tab = "playlists"; renderBrowse(); },
@@ -1411,6 +1493,11 @@ const DO = {
     } catch (e) { toast("Couldn't reach the hub. Nothing changed."); }
   },
   chipSpk: (id) => (nowOf(SP()) ? DO.spkGroup(id) : DO.pickSpk(id)),
+  spDevice: (id) => {
+    const sp = SP(), n = nowOf(sp);
+    if (n && n.device && n.device.id === id) return;
+    act("music.device", { device: id });
+  },
   shuffle: async () => {
     const n = nowOf(SP()); if (!n) return;
     try {
@@ -1604,6 +1691,7 @@ stage.addEventListener("change", (e) => {
   if (t.dataset.kel != null) { S.dragging = false; act("lights.white", { light: t.dataset.kel, kelvin: Number(t.value) }); return; }
   if (t.dataset.vol == null) return;
   S.dragging = false;
+  if (t.dataset.vol === "spotify") { act("music.volume", { value: Number(t.value) }); return; }
   act("speakers.volume", { speaker: t.dataset.vol, value: Number(t.value) });
 });
 document.addEventListener("pointerup", () => { if (S.dragging) setTimeout(() => { S.dragging = false; renderSheet(); }, 50); });

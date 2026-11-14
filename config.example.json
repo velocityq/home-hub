@@ -11,6 +11,7 @@
     "outside": {"cast": "OUTSIDE", "name": "Outside"}
   },
   "speaker_model": "WiFiCeilingSpeakerV2",
+  "music": "cast",
   "zones": {
     "living": "Living", "media": "Media", "rumpus": "Rumpus", "master-bed": "Master Bed",
     "bed-2": "Bed 2", "bed-3": "Bed 3", "bed-4": "Bed 4"

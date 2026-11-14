@@ -47,6 +47,8 @@ class Spotify:
         self.last_error = None
         self.quick = {"playlists": [], "last": None}   # for the one tap music buttons
         self.quick_at = 0.0
+        self.devs = []               # GET /me/player/devices: where Spotify can play right now
+        self.devs_at = 0.0
         self._lib = None
         self._lib_at = 0.0
 
@@ -89,6 +91,8 @@ class Spotify:
             if self.linked:
                 try:
                     await self.refresh_player()
+                    if time.time() - self.devs_at > 10:
+                        await self.refresh_devices()
                     if time.time() - self.quick_at > 600:
                         await self.refresh_quick()
                     self.last_error = None
@@ -233,6 +237,28 @@ class Spotify:
     async def devices(self):
         d = await self.call("GET", "/me/player/devices")
         return (d or {}).get("devices") or []
+
+    async def refresh_devices(self):
+        """The Spotify Connect devices (phones, computers, TVs, speakers) for the screens. Never fails the poll."""
+        self.devs_at = time.time()
+        try:
+            devs = await self.devices()
+        except Conflict as e:
+            log.info("spotify: devices unavailable: %s", e.text)
+            return self.devs
+        rows = [{"id": d["id"], "name": d.get("name") or "Spotify device", "type": (d.get("type") or "").lower(),
+                 "active": bool(d.get("is_active")), "volume": d.get("volume_percent"),
+                 "restricted": bool(d.get("is_restricted"))} for d in devs if d.get("id")]
+        if rows != self.devs:
+            self.devs = rows
+            self.on_change()
+        return rows
+
+    async def volume(self, value, device_id=None):
+        params = {"volume_percent": str(int(value))}
+        if device_id:
+            params["device_id"] = device_id
+        await self.call("PUT", "/me/player/volume", params=params)
 
     async def transfer(self, device_id, play=True):
         await self.call("PUT", "/me/player", json={"device_ids": [device_id], "play": play})

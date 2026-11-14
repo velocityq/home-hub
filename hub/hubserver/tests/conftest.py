@@ -67,7 +67,7 @@ async def wait_for(cond, timeout=3.0):
 
 
 async def build(home, cast=None, linked=False, bridge_key=None, cfg_bridge_key=None, cors=(), air_kw=None,
-                ask_factory=None, wall_dir=None, discover=None, wait=True):
+                ask_factory=None, wall_dir=None, discover=None, wait=True, music=None):
     c = Ctx()
     c.bridge = TestServer(fake_bridge(bridge_key))
     await c.bridge.start_server()
@@ -80,6 +80,8 @@ async def build(home, cast=None, linked=False, bridge_key=None, cfg_bridge_key=N
     cfg["airtouch_host"] = "192.0.2.39"
     cfg["people"] = ["Sam", "Alex"]
     cfg["place"] = "Riverside"
+    if music:
+        cfg["music"] = music
     holder = {}
 
     def changed():

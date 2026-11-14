@@ -106,7 +106,10 @@ def now_playing_line(state: dict) -> str:
         what += f" (album {_data(now['album'])})"
     status = "playing" if now.get("playing") else "paused"
     src = {"spotify": "Spotify", "cast": "Cast"}.get(now.get("source"), now.get("source") or "")
-    where = ", ".join(names.get(s, s) for s in (now.get("on") or [])) or "no speakers"
+    dev = now.get("device") or {}
+    where = ", ".join(names.get(s, s) for s in (now.get("on") or [])) or (
+        f"Spotify device {_data(dev['name'])}" + (f" at volume {dev['volume']}" if dev.get("volume") is not None else "")
+        if dev.get("name") else "no speakers")
     pos = ""
     if now.get("duration"):
         pos = f", {_mmss(now.get('position'))} of {_mmss(now.get('duration'))}"
@@ -138,13 +141,19 @@ def speakers_block(state: dict) -> str:
 
 
 def spotify_line(state: dict) -> str:
-    linked = ((state.get("speakers") or {}).get("spotify") or {}).get("linked")
-    if linked:
+    sp = (state.get("speakers") or {}).get("spotify") or {}
+    if sp.get("linked"):
+        devs = sp.get("devices") or []
+        if devs:
+            return "Spotify: linked (music_search_play works). Its devices (for music_device): " + "; ".join(
+                f"{_data(d.get('name'))} [{d.get('id')}]{' (playing here)' if d.get('active') else ''}" for d in devs) + "."
         return "Spotify: linked (music_search_play works)."
     return "Spotify: NOT linked yet, so music_search_play cannot find new music; play/pause/skip still work."
 
 
 def music_summary(state: dict) -> str:
+    if (state.get("speakers") or {}).get("mode") == "spotify":
+        return now_playing_line(state) + "\n" + spotify_line(state)
     return now_playing_line(state) + "\n" + speakers_block(state)
 
 

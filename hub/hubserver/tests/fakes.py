@@ -450,6 +450,12 @@ def fake_spotify():
                  "context": {"uri": "spotify:playlist:37i9dQZEVXcTESTDISCOVER"}}]})
         if path == "/me/tracks":
             return web.json_response({"items": [{"track": {"uri": "spotify:track:liked1"}}]})
+        if path == "/me/player/volume":
+            dev = request.query.get("device_id") or (p or {}).get("device")
+            for d in st["devices"]:
+                if d["id"] == dev:
+                    d["volume_percent"] = int(request.query.get("volume_percent", "0"))
+            return web.Response(status=204)
         if path == "/me/player/shuffle":
             if p:
                 p["shuffle"] = request.query.get("state") == "true"

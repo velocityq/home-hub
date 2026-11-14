@@ -37,6 +37,10 @@ the ids there and in `config.json` to fit yours.
   The hub strips any `ANTHROPIC_API_KEY` before it runs Claude, so it never bills an API key.
 - The devices you have: an AirTouch 5 console, Cast speakers, couch-tv for TVs, WiZ lights. Each part is
   optional: a missing device shows as "not answering" and the rest works.
+- No Cast speakers? Set `"music": "spotify"` in `config.json`. The music card then shows whatever the linked
+  Spotify account is playing, on any of its devices (phone, computer, TV, speaker), and the music view's Devices
+  tab and Play on row move it between them and set that device's volume. Spotify only allows this for an app
+  registered under a Spotify Premium account.
 - WiZ lights are listed in `config.json` (`"lights": [{"id": "lamp", "name": "Lamp", "mac": "...", "ip": "..."}]`)
   and spoken to directly on the home network, with no WiZ account in the hub. A light can be a room of several
   bulbs (`"bulbs": [{"mac": "...", "ip": "..."}, ...]` in place of one `mac` and `ip`): it shows as one light

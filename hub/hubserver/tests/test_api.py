@@ -305,6 +305,19 @@ async def test_spotify_login_only_local(hub):
     assert r.status == 409 and "client id" in (await r.text()).lower()
 
 
+async def test_spotify_client_form_posts_from_its_own_page(hub):
+    cid = "a" * 32
+    # what a browser sends for this page's own form (it is served with Referrer-Policy: no-referrer)
+    r = await hub.client.post("/spotify/client", data={"client_id": cid}, allow_redirects=False,
+                              headers={"Origin": "null", "Sec-Fetch-Site": "same-origin"})
+    assert r.status == 302
+    assert cfgmod.read_json(cfgmod.path("spotify.json"))["client_id"] == cid
+    # another web page open on this computer may not post here
+    for h in ({"Origin": "null", "Sec-Fetch-Site": "cross-site"}, {"Origin": "https://evil.example"}):
+        r = await hub.client.post("/spotify/client", data={"client_id": cid}, allow_redirects=False, headers=h)
+        assert r.status == 403
+
+
 async def test_unknown_api_path(hub):
     r = await hub.client.get("/api/nothing", headers=auth())
     assert r.status == 404 and (await r.json())["ok"] is False

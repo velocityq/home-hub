@@ -15,6 +15,7 @@ EXPECTED_TOOLS = {
     "house_status", "aircon_power", "aircon_set_temperature", "aircon_nudge", "aircon_mode", "aircon_fan",
     "aircon_room", "aircon_all_rooms", "music_control", "music_choose_speakers", "music_search_play", "music_start",
     "speaker_volume", "tv_power", "tv_volume", "tv_mute", "tv_open_app", "tv_play_title", "tv_remote", "frame_art_mode",
+    "music_device", "music_volume",
     "light_power", "light_brightness", "light_white", "light_color", "light_schedule", "light_unschedule",
 }
 
@@ -38,6 +39,8 @@ CALLS = [
     ("music_search_play", {"query": "  rainy day jazz "}, "music.search_play", {"query": "rainy day jazz"},
      "rainy day jazz"),
     ("music_start", {"what": "liked"}, "music.start", {"what": "liked"}, "Started from the wall"),
+    ("music_device", {"device": "fakedevicetv00003"}, "music.device", {"device": "fakedevicetv00003"}, "Moved the music"),
+    ("music_volume", {"value": 35}, "music.volume", {"value": 35}, "Volume set to 35"),
     ("speaker_volume", {"speaker": "lounge-room", "value": 30}, "speakers.volume",
      {"speaker": "lounge-room", "value": 30}, "Lounge Room 30"),
     ("speaker_volume", {"speaker": "all", "value": 20}, "speakers.volume", {"speaker": "all", "value": 20}, "20"),

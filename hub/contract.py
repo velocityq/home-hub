@@ -96,6 +96,13 @@ def _color(v, name="color"):
     return v
 
 
+def _spotify_device(v, name="device"):
+    v = _text(v, name, 80)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,80}", v):
+        raise ContractError(f"{name} must be a Spotify device's id from the state")
+    return v
+
+
 def _clock(v, name="time"):
     v = _text(v, name, 5)
     m = re.fullmatch(r"(\d{1,2}):(\d{2})", v)
@@ -167,6 +174,11 @@ ACTIONS: dict[str, tuple[str, dict, set]] = {
                           "Needs Spotify linked.",
                           {"query": lambda v: _text(v, "query", 120),
                            "speakers": lambda v: _speaker_list(v, "speakers")}, {"query"}),
+    "music.device": ("Move the music to one of the Spotify account's devices (a phone, computer, TV or speaker), "
+                     "by its id from the state (speakers.spotify.devices). Needs Spotify linked.",
+                     {"device": _spotify_device}, {"device"}),
+    "music.volume": ("Set the volume, 0 to 100, of the Spotify device the music is playing on. Needs Spotify linked.",
+                     {"value": lambda v: _int(v, "value", 0, 100)}, {"value"}),
     "speakers.volume": ("Set one speaker's volume, 0 to 100, or 'all' for every speaker that is playing.",
                         {"speaker": lambda v: _choice(v, "speaker", SPEAKERS + ["all"]),
                          "value": lambda v: _int(v, "value", 0, 100)}, {"speaker", "value"}),
@@ -273,7 +285,12 @@ EXAMPLE_STATE = {
             "source": "spotify",                       # "spotify" or "cast"
             "on": ["lounge-room", "outside"],          # where it is playing
         },
+        "mode": "cast",             # "spotify" when the house has no Cast speakers ("music": "spotify" in config.json):
+                                    # devices and groups are then empty, and the music is the Spotify account's,
+                                    # on any of its devices (now.device says which)
         "spotify": {"linked": False},                  # true once Spotify is linked on the iMac
+        # when linked, also: "playlists", "last", and "devices": [{"id", "name", "type" ("computer",
+        # "smartphone", "tv", "speaker", ...), "active", "volume" (0-100 or null), "restricted"}]
     },
     "lights": {
         "available": True,          # false when the house has no lights set up, or none of them answers
