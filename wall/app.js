@@ -2035,6 +2035,17 @@ connect();
 // while the music plays somewhere the tablet cannot hear, they move on their own in the same shape.
 const VZ = { el: null, raf: 0, stream: null, ac: null, an: null, bins: null, live: false, quiet: 0, lv: [], pk: 0.3, t: 0 };
 const VZ_N = 104;
+// With music playing and no touch for 30 s, the song view comes up by itself (any touch counts as use).
+const BIG_AFTER = 30000;
+let lastUse = Date.now();
+["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => { lastUse = Date.now(); }, true));
+setInterval(() => {
+  if (VZ.el || Date.now() - lastUse < BIG_AFTER) return;
+  const n = nowOf(SP()); if (!n || !n.playing) return;
+  if (REC.held || SED || ["answer", "person", "settings"].includes(S.open)) return;     // talking, setting up, or editing
+  const f = document.activeElement; if (f && /^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)) return;
+  bigOpen();
+}, 2000);
 function bigOpen() {
   if (VZ.el || !nowOf(SP())) return;
   const el = document.createElement("div");
