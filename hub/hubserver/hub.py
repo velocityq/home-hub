@@ -16,7 +16,8 @@ actions_log = logging.getLogger("hub.actions")
 
 THROTTLE = 0.25        # seconds between two state messages on the events socket
 BACKSTOP = 30          # seconds: send the state even if nothing seemed to change
-ACTION_TIMEOUT = 50    # seconds an action may take (a TV waking takes up to 32)
+ACTION_TIMEOUT = 80    # seconds an action may take (a TV waking takes up to 32; music on a sleeping TV also
+                       # opens Spotify there and waits for it to appear)
 
 DEVICE_OF = {"aircon": "aircon", "music": "speakers", "speakers": "speakers", "tv": "tvs", "lights": "lights"}
 NO_LIGHTS = {"available": False, "devices": []}

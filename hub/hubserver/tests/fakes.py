@@ -221,7 +221,7 @@ def bridge_start():
 
 APPS = [{"id": "youtube", "name": "YouTube", "installed": True}, {"id": "netflix", "name": "Netflix", "installed": True},
         {"id": "abc-iview", "name": "ABC iview", "installed": True}, {"id": "settings", "name": "Settings", "installed": True},
-        {"id": "stan", "name": "Stan", "installed": False}]
+        {"id": "stan", "name": "Stan", "installed": False}, {"id": "spotify", "name": "Spotify", "installed": True}]
 
 
 def fake_bridge(key=None):

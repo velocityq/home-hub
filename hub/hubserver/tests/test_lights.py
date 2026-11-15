@@ -69,7 +69,7 @@ async def test_reads_and_changes_a_bulb(house):
     assert [d["id"] for d in snap["devices"]] == ["lamp", "attic"]          # the bad row was skipped
     assert snap["available"] is True
     assert snap["devices"][0] == {"id": "lamp", "name": "Lamp", "available": True, "on": False, "brightness": 100,
-                                  "kelvin": 2700, "color": None, "schedules": [], "fading": False}
+                                  "kelvin": 2700, "color": None, "schedules": [], "fading": False, "disco": None}
     assert snap["devices"][1]["available"] is False                           # no bulb has that mac
 
     await lights.do("lights.power", {"light": "lamp", "on": True})
@@ -227,6 +227,46 @@ async def test_a_change_by_hand_stops_a_fade(tmp_path):
     finally:
         await lights.stop()
         transport.close()
+
+
+async def test_disco_runs_on_a_room_and_puts_it_back():
+    loop = asyncio.get_running_loop()
+    t1, b1 = await loop.create_datagram_endpoint(lambda: Bulb("a8bb50000011"), local_addr=("127.0.0.1", 0))
+    port = t1.get_extra_info("sockname")[1]
+    t2, b2 = await loop.create_datagram_endpoint(lambda: Bulb("a8bb50000012"), local_addr=("127.0.0.2", port))
+    lights = Lights({"lights": [{"id": "bedroom", "name": "Bedroom", "bulbs": [
+        {"mac": "a8bb50000011", "ip": "127.0.0.1"}, {"mac": "a8bb50000012", "ip": "127.0.0.2"}]}]}, port=port)
+    lights.disco_every = {"slow": 0.2, "medium": 0.05, "fast": 0.02}
+    await lights.start()
+    try:
+        for _ in range(40):
+            if all(b["pilot"] for b in lights.bulbs):
+                break
+            await asyncio.sleep(0.05)
+        await lights.do("lights.white", {"light": "bedroom", "kelvin": 4000})
+        await lights.do("lights.disco", {"light": "bedroom", "on": True, "speed": "medium"})
+        assert lights.snapshot()["devices"][0]["disco"] == "medium"
+        await asyncio.sleep(0.3)
+        colours = [tuple(p.get(k) for k in "rgb") for p in b1.got if "r" in p]
+        assert len(set(colours)) >= 3                                 # it keeps changing
+        assert b1.got[-1] != b2.got[-1]                               # and the two bulbs are not the same colour
+        await lights.do("lights.disco", {"light": "bedroom", "on": True, "speed": "fast"})   # a new speed
+        assert lights.snapshot()["devices"][0]["disco"] == "fast"
+        await lights.do("lights.disco", {"light": "bedroom", "on": False})
+        await asyncio.sleep(0.1)
+        assert lights.snapshot()["devices"][0]["disco"] is None and not lights._discos
+        assert b1.got[-1] == b2.got[-1] == {"state": True, "dimming": 100, "temp": 4000}   # back as it was
+
+        await lights.do("lights.disco", {"light": "all", "on": True})
+        await lights.do("lights.brightness", {"light": "bedroom", "value": 40})               # a change by hand stops it
+        await asyncio.sleep(0.15)
+        assert not lights._discos and b1.got[-1] == {"state": True, "dimming": 40}
+        with pytest.raises(Conflict):
+            await lights.do("lights.disco", {"light": "nope", "on": False})
+    finally:
+        await lights.stop()
+        t1.close()
+        t2.close()
 
 
 async def test_a_house_with_no_lights():

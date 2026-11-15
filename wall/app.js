@@ -28,6 +28,7 @@ const I = {
   chev: '<path d="M9 5l7 7-7 7"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
   bulb: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.7 10.7c.7.6 1.1 1.4 1.2 2.3h5c.1-.9.5-1.7 1.2-2.3A6 6 0 0 0 12 3z"/>',
@@ -44,7 +45,9 @@ const I = {
   thermo: '<path d="M14 14.8V4.5a2 2 0 0 0-4 0v10.3a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>',
   heart: '<path d="M12 20.5s-8-5-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 6-8 11-8 11z"/>',
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
-  shuffle: '<path d="M3 7h3.5c2.5 0 4 1.5 5.5 4s3 4 5.5 4H21M3 17h3.5c2.5 0 4-1.5 5.5-4M15 7h2.5M17.5 7H21M18 4l3 3-3 3M18 12l3 3-3 3"/>',
+  shuffle: '<path d="M3 7h2.5c2.2 0 3.6 1 4.8 2.8l3.4 4.4c1.2 1.8 2.6 2.8 4.8 2.8H20M3 17h2.5c1.6 0 2.8-.5 3.8-1.5M14.7 8.5c1-1 2.2-1.5 3.8-1.5H20M17.5 4.5 20 7l-2.5 2.5M17.5 14.5 20 17l-2.5 2.5"/>',
+  pin: '<path d="M9 3.5h6M10 3.5v6.2L6.5 14h11L14 9.7V3.5M12 14v6.5"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
 };
@@ -148,9 +151,15 @@ function optimistic(v, action, a) {
       }
       break;
     }
+    case "lights.disco":
+      ((v.lights && v.lights.devices) || []).forEach((d) => {
+        if (d.available && (a.light === "all" || a.light === d.id)) { d.disco = a.on ? a.speed || "medium" : null; if (a.on) d.on = true; }
+      });
+      break;
     case "lights.power": case "lights.brightness": case "lights.white": case "lights.color":
       ((v.lights && v.lights.devices) || []).forEach((d) => {
         if (!d.available || (a.light !== "all" && a.light !== d.id)) return;
+        d.disco = null;
         if (action === "lights.power") { d.on = a.on; return; }
         d.on = true;
         if (action === "lights.brightness") d.brightness = a.value;
@@ -183,7 +192,9 @@ function kelvinHex(k) {                     // a swatch for a white tone: amber 
   return `rgb(${mix(255, 222)},${mix(170, 236)},${mix(84, 255)})`;
 }
 const liTint = (d) => (d.color && /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : kelvinHex(d.kelvin));
-const liState = (d) => (!d.available ? "Not answering" : d.on ? `On · ${d.brightness != null ? d.brightness + "%" : ""}` : "Off");
+const liState = (d) => (!d.available ? "Not answering" : d.disco ? `Disco · ${d.disco}` : d.on ? `On · ${d.brightness != null ? d.brightness + "%" : ""}` : "Off");
+const DISCO_SPEEDS = [["slow", "Slow"], ["medium", "Medium"], ["fast", "Fast"]];
+const liDot = (d, big) => `<span class="lidot ${big ? "big" : ""} ${d.available && d.disco ? `disco ${d.disco}` : ""}" style="background:${d.available && d.on && !d.disco ? liTint(d) : "transparent"}"></span>`;
 const LI_WHITES = [[2200, "Candle"], [2700, "Warm"], [4000, "Neutral"], [6500, "Daylight"]];
 const LI_COLORS = [["#ff0000", "Red"], ["#ff6a00", "Orange"], ["#ffd000", "Yellow"], ["#00ff40", "Green"], ["#00e5ff", "Cyan"],
                    ["#0040ff", "Blue"], ["#8a00ff", "Purple"], ["#ff00aa", "Pink"]];
@@ -275,7 +286,7 @@ function lightCardA() {
 function lightCardB() {
   const li = LI(), any = liOn(li).length > 0;
   if (!li.available) return `<div class="card col" data-card="lights" data-open="lights" data-src="b-lights" style="padding:20px 22px;height:300px;justify-content:center">${liDown()}</div>`;
-  const rows = liList(li).slice(0, 3).map((d) => `<div class="row" style="height:44px"><span class="lidot" style="background:${d.available && d.on ? liTint(d) : "transparent"}"></span>
+  const rows = liList(li).slice(0, 3).map((d) => `<div class="row" style="height:44px">${liDot(d)}
       <div class="grow ellip" style="font-size:16px;font-weight:600">${esc(d.name)}</div><div class="sub" style="font-size:14px">${esc(liState(d))}</div></div>`).join("");
   return `<div class="card ${any ? "on" : ""} col" data-card="lights" data-open="lights" data-src="b-lights" style="padding:20px 22px;height:300px">
       <div class="row"><div class="ic ${any ? "warm" : "off"}">${svg("bulb")}</div><div class="col grow"><div class="title">Lighting</div><div class="sub">${liStatus(li)}</div></div>
@@ -354,7 +365,7 @@ function sheetLights() {
     const whites = LI_WHITES.map(([k, n]) => `<button class="pill ${on && d.kelvin === k ? "sel" : ""}" data-do="liWhite" data-tv="${esc(d.id)}" data-arg="${k}" style="height:44px;padding:0 14px;font-size:15px"><span class="lidot" style="background:${kelvinHex(k)}"></span>${n}</button>`).join("");
     const colors = LI_COLORS.map(([c, n]) => `<button class="swatch ${on && d.color === c ? "sel" : ""}" data-do="liColor" data-tv="${esc(d.id)}" data-arg="${c}" aria-label="${n}" title="${n}" style="background:${c}"></button>`).join("");
     return `<div class="tvcard ${on ? "on" : ""}" data-light="${esc(d.id)}">
-      <div class="row"><span class="lidot big" style="background:${on ? liTint(d) : "transparent"}"></span>
+      <div class="row">${liDot(d, true)}
         <div class="col grow" style="min-width:0"><div style="font-size:22px;font-weight:700" class="ellip">${esc(d.name)}</div><div class="sub" style="font-size:14px">${esc(liState(d))}</div></div>
         <button class="btn round ${on ? "warm" : ""}" data-do="liToggle" data-arg="${esc(d.id)}" aria-label="Power" style="width:64px;height:64px;${dim}">${svg("power")}</button></div>
       <div class="col" style="gap:4px;${dim}">
@@ -366,6 +377,10 @@ function sheetLights() {
         <div class="row" style="gap:8px 6px;flex-wrap:wrap">${whites}</div>
         <div class="label" style="margin-top:12px">Colour</div>
         <div class="row" style="gap:10px;flex-wrap:wrap">${colors}</div>
+        <div class="label" style="margin-top:12px">Disco</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="pill discobtn ${d.disco ? "sel" : ""}" data-do="liDisco" data-tv="${esc(d.id)}" data-arg="${d.disco ? "off" : d.disco || "medium"}" style="height:48px;padding:0 18px">${d.disco ? "Stop disco" : "Disco"}</button>
+          ${DISCO_SPEEDS.map(([k, n]) => `<button class="pill ${d.disco === k ? "sel" : ""}" data-do="liDisco" data-tv="${esc(d.id)}" data-arg="${k}" style="height:48px;padding:0 14px;font-size:15px">${n}</button>`).join("")}</div>
       </div>
       ${schedBox(d)}</div>`;
   }).join("");
@@ -652,7 +667,8 @@ function devRows(sp) {
   if (!devs.length) return `<div class="hint" style="font-size:17px">Spotify can't see any devices right now. Open Spotify on your phone, computer or TV and it shows up here.</div>`;
   return devs.map((d) => {
     const here = !!(n && n.device && n.device.id === d.id) || (!n && d.active);
-    const status = d.restricted ? "Can't be controlled from here" : here ? (n && n.playing ? "Playing here" : "Selected") : "Tap to play here";
+    const status = d.restricted ? "Can't be controlled from here" : here ? (n && n.playing ? "Playing here" : "Selected")
+      : d.asleep ? "Off · tap to turn on and play here" : "Tap to play here";
     return `<button class="spk devrow ${here ? "here" : ""}" data-do="spDevice" data-arg="${esc(d.id)}" ${d.restricted ? "disabled" : ""} style="text-align:left;${d.restricted ? "opacity:.55" : ""}">
       <div class="ic ${here ? "green" : "off"}" style="width:44px;height:44px">${svg(devIcon(d))}</div>
       <div class="col grow" style="min-width:0"><div style="font-size:19px;font-weight:600" class="ellip">${esc(d.name)}</div>
@@ -716,6 +732,25 @@ function renderBrowse() {
 }
 const mRow = (it, what) => `<button class="mrow" data-do="mPlayUri" data-arg="${esc(it.uri)}">${imgDiv(it.image, "mimg" + (what === "Artist" ? " round" : ""))}
   <span class="col" style="min-width:0;text-align:left"><b class="ellip">${esc(it.name)}</b><small class="ellip">${esc(it.sub || what)}</small></span></button>`;
+// The − and + by the music volume: taps close together add up and go as one change.
+let mVolWant = null, mVolTimer = null;
+function mVolTap(d) {
+  const sp = SP(), n = nowOf(sp); if (!sp || !n) return;
+  const sl = $('[data-vol="spotify"],[data-vol="all"]');
+  const cur = mVolWant != null ? mVolWant : sl && !sl.disabled ? Number(sl.value) : spMode(sp) && n.device && n.device.volume != null ? n.device.volume : 50;
+  mVolWant = Math.max(0, Math.min(100, cur + d));
+  if (sl) { sl.value = mVolWant; sl.style.setProperty("--p", mVolWant + "%"); }
+  clearTimeout(mVolTimer);
+  mVolTimer = setTimeout(() => {
+    const v = mVolWant; mVolWant = null;
+    if (spMode(sp)) act("music.volume", { value: v }); else act("speakers.volume", { speaker: "all", value: v });
+  }, 350);
+}
+// Playlists pinned on this tablet: shown first on Home and in Playlists.
+const PINS = (() => { try { const v = JSON.parse(localStorage.getItem("hub.mpins")); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : []; } catch (e) { return []; } })();
+function savePins() { try { localStorage.setItem("hub.mpins", JSON.stringify(PINS)); } catch (e) { /* private mode */ } }
+const pinned = (lib) => PINS.map((id) => lib.playlists.find((p) => p.id === id)).filter(Boolean);
+const shuffleBtn = (n) => `<button class="btn round shuf ${n.shuffle ? "on" : ""}" data-do="shuffle" aria-label="Shuffle" aria-pressed="${!!n.shuffle}">${lineIcon("shuffle", 28)}</button>`;
 function mHome(sp) {
   const lib = M.lib;
   if (!lib) return M.err ? `<div class="notice">${svg("warn")}<span>${esc(M.err)}</span></div>` : `<div class="wait">Loading your Spotify…</div>`;
@@ -728,7 +763,10 @@ function mHome(sp) {
     lib.discover ? tile("discover", `<div class="mimg tile disc">${lineIcon("spark", 40)}</div>`, "Discover Weekly", "Made for you, every Monday") : "",
     recent.length || (sp.spotify && sp.spotify.last) ? tile("recent", imgDiv(recent[0] && recent[0].image, "mimg tile"), "Recently played", (sp.spotify && sp.spotify.last) || recent[0].name) : "",
   ].join("");
-  return `<div class="mtiles">${tiles}</div>
+  const pins = pinned(lib);
+  const pinRow = pins.length ? `<div class="label" style="margin:0 0 8px">Pinned</div><div class="mpins">${pins.map((p) =>
+    `<button class="mpinned" data-do="musicStart" data-arg="playlist:${esc(p.id)}">${imgDiv(p.image, "mimg")}<b class="ellip">${esc(p.name)}</b></button>`).join("")}</div>` : "";
+  return `${pinRow}<div class="mtiles">${tiles}</div>
     <div class="row" style="margin:16px 0 8px"><div class="label grow">Recently played songs</div>
       <button class="pill" data-do="mPickMain" style="height:48px">Change main playlist</button></div>
     <div class="mrows">${recent.slice(0, 8).map((t) => mRow(t, "Song")).join("") || '<div class="hint">Nothing played lately. Search for a song, or pick a playlist.</div>'}</div>`;
@@ -748,8 +786,10 @@ function mPlaylists() {
   if (!lib) return M.err ? `<div class="notice">${svg("warn")}<span>${esc(M.err)}</span></div>` : `<div class="wait">Loading your playlists…</div>`;
   const head = M.pickMain ? `<div class="notice" style="margin-bottom:12px">${svg("check")}<span class="grow">Tap the playlist you want as your main one.</span>
       <button class="pill" data-do="mPickMain" style="height:44px">Cancel</button></div>` : "";
-  const cards = lib.playlists.map((p) => `<button class="mcard ${p.id === lib.main ? "isMain" : ""}" data-do="${M.pickMain ? "mSetMain" : "musicStart"}" data-arg="${M.pickMain ? esc(p.id) : "playlist:" + esc(p.id)}">
-      ${imgDiv(p.image, "mcov", p.id === lib.main ? '<span class="mbadge">Main</span>' : "")}<b class="ellip">${esc(p.name)}</b></button>`).join("");
+  const pins = pinned(lib), order = pins.concat(lib.playlists.filter((p) => !PINS.includes(p.id)));
+  const cards = order.map((p) => { const on = PINS.includes(p.id); return `<div class="mcardw"><button class="mcard ${p.id === lib.main ? "isMain" : ""}" data-do="${M.pickMain ? "mSetMain" : "musicStart"}" data-arg="${M.pickMain ? esc(p.id) : "playlist:" + esc(p.id)}">
+      ${imgDiv(p.image, "mcov", p.id === lib.main ? '<span class="mbadge">Main</span>' : "")}<b class="ellip">${esc(p.name)}</b></button>
+      ${M.pickMain ? "" : `<button class="mpin ${on ? "on" : ""}" data-do="mPin" data-arg="${esc(p.id)}" aria-label="${on ? "Unpin" : "Pin"} ${esc(p.name)}" aria-pressed="${on}">${lineIcon("pin", 22)}</button>`}</div>`; }).join("");
   return head + (cards ? `<div class="mgrid">${cards}</div>` : `<div class="hint">There are no playlists in his Spotify yet.</div>`) +
     (!M.pickMain ? `<div class="row" style="margin-top:12px"><button class="pill" data-do="mPickMain">Change main playlist</button></div>` : "");
 }
@@ -772,22 +812,24 @@ function mNow(sp) {
   const devVol = spMode(sp) && n.device && n.device.volume != null ? n.device.volume : null;
   const allVol = spMode(sp) ? (devVol || 0) : inUse.length ? Math.round(inUse.reduce((a, d) => a + (d.volume || 0), 0) / inUse.length) : 0;
   const p = posNow();
-  return `<div class="bigart" style="${artBg(n)}"></div>
+  return `<div class="bigart" data-do="mBig" role="button" aria-label="Show the song full screen" style="${artBg(n)}"></div>
     <div><div style="font-size:26px;font-weight:700" class="ellip">${esc(n.title)}</div><div class="sub ellip" style="font-size:18px">${esc(n.artist)}</div></div>
     ${spMode(sp) && n.device ? `<button class="devline" data-do="mTab" data-arg="speakers" aria-label="Choose where it plays">${lineIcon(devIcon(n.device), 18)}<span class="ellip">${n.playing ? "Playing" : "Paused"} on ${esc(n.device.name)}</span></button>` : ""}
     ${n.duration ? `<div>${prog(8)}<div class="row sub" style="justify-content:space-between;font-size:14px;margin-top:6px"><span data-pos>${p != null ? mmss(p) : ""}</span><span>${mmss(n.duration)}</span></div></div>` : ""}
     <div class="row" style="justify-content:center;gap:10px">
-      ${linkedSp(sp) ? `<button class="btn round ${n.shuffle ? "green" : "fill"}" data-do="shuffle" aria-label="Shuffle ${n.shuffle ? "on" : "off"}" style="width:56px;height:56px">${svg("shuffle")}</button>` : ""}
+      ${linkedSp(sp) ? shuffleBtn(n) : ""}
       <button class="btn round fill" data-do="prev" aria-label="Previous song" style="width:60px;height:60px">${svg("prev")}</button>
       <button class="btn round fill white" data-do="playPause" aria-label="${n.playing ? "Pause" : "Play"}" style="width:80px;height:80px;border-radius:40px">${svg(n.playing ? "pause" : "play")}</button>
       <button class="btn round fill" data-do="next" aria-label="Next song" style="width:60px;height:60px">${svg("next")}</button></div>
-    <div class="row"><span class="ic off" style="width:30px;height:30px;flex:none">${svg(spMode(sp) ? devIcon(n.device) : "speaker")}</span><input type="range" min="0" max="100" value="${allVol}" data-vol="${spMode(sp) ? "spotify" : "all"}" aria-label="Volume" style="--p:${allVol}%" ${spMode(sp) && devVol == null ? "disabled" : ""}></div>`;
+    <div class="row mvolrow"><button class="btn round fill mvolbtn" data-do="mVol" data-arg="-10" aria-label="Volume down">${lineIcon("minus", 22)}</button>
+      <input type="range" min="0" max="100" value="${allVol}" data-vol="${spMode(sp) ? "spotify" : "all"}" aria-label="Volume" style="--p:${allVol}%" ${spMode(sp) && devVol == null ? "disabled" : ""}>
+      <button class="btn round fill mvolbtn" data-do="mVol" data-arg="10" aria-label="Volume up">${lineIcon("plus", 22)}</button></div>`;
 }
 function mPlayOn(sp) {
   if (spMode(sp)) {
     const n = nowOf(sp), cur = n && n.device ? n.device.id : (spDevs(sp).find((d) => d.active) || {}).id;
     return `<span class="label" style="flex:none">Play on</span>` + (spDevs(sp).map((d) =>
-      `<button class="pill ${d.id === cur ? "sel" : ""}" data-do="spDevice" data-arg="${esc(d.id)}" ${d.restricted ? "disabled" : ""} style="height:52px;font-size:17px;flex:none">${lineIcon(devIcon(d), 18)} ${esc(d.name)}</button>`).join("")
+      `<button class="pill ${d.id === cur ? "sel" : ""}" data-do="spDevice" data-arg="${esc(d.id)}" ${d.restricted ? "disabled" : ""} style="height:52px;font-size:17px;flex:none;${d.asleep ? "opacity:.7" : ""}" ${d.asleep ? 'title="Off: tap to turn on and play here"' : ""}>${lineIcon(devIcon(d), 18)} ${esc(d.name)}</button>`).join("")
       || `<span class="sub">Open Spotify on a phone or computer</span>`);
   }
   const n = nowOf(sp), on = n ? n.on : pickList(sp);
@@ -1058,6 +1100,7 @@ function describe(action, a) {
     case "lights.brightness": return `${liName(a.light)} at ${a.value}%`;
     case "lights.white": return `${liName(a.light)} white`;
     case "lights.color": return `${liName(a.light)} colour changed`;
+    case "lights.disco": return a.on ? `Disco on in ${liName(a.light)}` : `Disco off in ${liName(a.light)}`;
     case "music.device": return `Music moved to ${((spDevs(SP()).find((d) => d.id === a.device)) || { name: "that device" }).name}`;
     case "music.volume": return `Volume ${a.value}`;
     case "lights.schedule": return `${liName(a.light)} schedule saved`;
@@ -1105,6 +1148,7 @@ function renderSheet(force) {
     if (root && sp && sp.available && root.dataset.mroot === (linkedSp(sp) ? "1" : "0")) {
       if (root.dataset.mroot === "1") {
         sh.querySelector("[data-mnow]").innerHTML = mNow(sp);
+        bigUpdate();
         sh.querySelector("[data-mplayon]").innerHTML = mPlayOn(sp);
         if (M.tab === "speakers") sh.querySelector("[data-mbrowse]").innerHTML = mBrowse();
       } else sh.innerHTML = SHEETS.music.fn();
@@ -1203,6 +1247,7 @@ function closeSheet() {
   sh.dataset.closing = "1";
   SED = null;                                         // an unsaved schedule is dropped with the sheet
   if (S.open === "person") personGone();
+  bigClose();
   clearTimeout(answerTimer);
   const src = S.openSrc;
   stage.classList.remove("sheet-open");
@@ -1483,6 +1528,13 @@ const DO = {
     act("music.start", spMode(sp) ? { what: "uri", uri } : { what: "uri", uri, speakers: pickList(sp) }).finally(() => { S.starting = false; render(); });
   },
   mClear: () => { M.q = ""; M.res = null; M.seq++; const i = $("#msearch"); if (i) { i.value = ""; i.focus(); } renderBrowse(); },
+  mPin: (id) => {
+    const i = PINS.indexOf(id); if (i >= 0) PINS.splice(i, 1); else PINS.push(id);
+    savePins(); renderBrowse(); toast(i >= 0 ? "Unpinned" : "Pinned to the top of Home and Playlists", 2200);
+  },
+  mVol: (d) => mVolTap(Number(d)),
+  mBig: () => bigOpen(),
+  mBigClose: () => bigClose(),
   mPickMain: () => { M.pickMain = !M.pickMain; M.tab = "playlists"; renderBrowse(); },
   mSetMain: async (id) => {
     try {
@@ -1496,6 +1548,8 @@ const DO = {
   spDevice: (id) => {
     const sp = SP(), n = nowOf(sp);
     if (n && n.device && n.device.id === id) return;
+    const d = spDevs(sp).find((x) => x.id === id);
+    if (d && d.asleep) toast(`Turning on the ${d.name} TV and opening Spotify. This takes a few seconds.`, 8000);
     act("music.device", { device: id });
   },
   shuffle: async () => {
@@ -1539,6 +1593,7 @@ const DO = {
   liNudge: (d) => liNudgeTap(Number(d)),
   liWhite: (k, id) => act("lights.white", { light: id, kelvin: Number(k) }),
   liColor: (c, id) => act("lights.color", { light: id, color: c }),
+  liDisco: (sp, id) => act("lights.disco", sp === "off" ? { light: id, on: false } : { light: id, on: true, speed: sp }),
   schedNew: (_, lid) => { SED = { light: lid, id: null, time: "07:00", days: WEEKDAYS.slice(), do: "on", fade: 20, brightness: 100 }; renderSheet(true); },
   schedEdit: (sid, lid) => { const s = schedOf(lid, sid); if (s) { SED = { light: lid, ...s, brightness: s.brightness || 100 }; renderSheet(true); } },
   schedCancel: () => { SED = null; renderSheet(true); },
@@ -1973,6 +2028,135 @@ function fit() {
 window.addEventListener("resize", fit);
 fit(); renderScene(); render();
 connect();
+
+// ---------- the song, full screen (tap the cover in the Music panel) ----------
+// The lines at the bottom move with the sound in the room: the tablet's microphone is read by the browser's own
+// analyser, low notes on the left to high on the right. Nothing is recorded, kept or sent. With no microphone, or
+// while the music plays somewhere the tablet cannot hear, they move on their own in the same shape.
+const VZ = { el: null, raf: 0, stream: null, ac: null, an: null, bins: null, live: false, quiet: 0, lv: [], pk: 0.3, t: 0 };
+const VZ_N = 104;
+function bigOpen() {
+  if (VZ.el || !nowOf(SP())) return;
+  const el = document.createElement("div");
+  el.className = "mbig";
+  stage.appendChild(el); VZ.el = el;
+  bigUpdate();
+  el.animate([{ opacity: 0, transform: "scale(1.03)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.32,.72,0,1)" });
+  VZ.lv = new Array(VZ_N).fill(0.02); VZ.t = 0;
+  vzMic();
+  VZ.raf = requestAnimationFrame(vzFrame);
+}
+function bigClose() {
+  const el = VZ.el; if (!el) return;
+  VZ.el = null; cancelAnimationFrame(VZ.raf);
+  if (VZ.stream) VZ.stream.getTracks().forEach((t) => t.stop());
+  if (VZ.ac) VZ.ac.close().catch(() => {});
+  VZ.stream = VZ.ac = VZ.an = null; VZ.live = false;
+  el.style.pointerEvents = "none";
+  el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = () => el.remove();
+}
+function bigHtml() {
+  const sp = SP(), n = nowOf(sp);
+  if (!n) return "";
+  const art = artBg(n) || "";
+  return `<div class="mbig-bg" style="${art}"></div><div class="mbig-shade"></div>
+    <button class="btn round mbig-x" data-do="mBigClose" aria-label="Back to Music">${lineIcon("down", 30)}</button>
+    <div class="mbig-main">
+      <div class="mbig-art" data-do="mBigClose" style="${art}"></div>
+      <div class="col mbig-info">
+        <div class="mbig-title">${esc(n.title)}</div>
+        <div class="mbig-artist">${esc(n.artist)}</div>
+        <div class="mbig-dev">${spMode(sp) && n.device ? `${lineIcon(devIcon(n.device), 20)} ${n.playing ? "Playing" : "Paused"} on ${esc(n.device.name)}` : ""}</div>
+        <div class="row mbig-ctl">
+          ${linkedSp(sp) ? shuffleBtn(n) : ""}
+          <button class="btn round fill" data-do="prev" aria-label="Previous song" style="width:64px;height:64px">${svg("prev")}</button>
+          <button class="btn round fill white" data-do="playPause" aria-label="${n.playing ? "Pause" : "Play"}" style="width:84px;height:84px;border-radius:42px">${svg(n.playing ? "pause" : "play")}</button>
+          <button class="btn round fill" data-do="next" aria-label="Next song" style="width:64px;height:64px">${svg("next")}</button></div>
+      </div></div>
+    <div class="mbig-viz"><canvas width="2400" height="360" data-viz></canvas>
+      <div class="row mbig-times"><span data-bpos></span><span>${n.duration ? mmss(n.duration) : ""}</span></div></div>`;
+}
+function bigUpdate() {
+  const el = VZ.el; if (!el) return;
+  const n = nowOf(SP());
+  if (!n) { bigClose(); return; }
+  const key = [n.title, n.artist, n.art, n.duration, n.playing, n.shuffle, n.device && n.device.id].join("|");
+  if (el.dataset.key === key) return;
+  const keep = el.querySelector("[data-viz]");
+  el.innerHTML = bigHtml();
+  if (keep) el.querySelector("[data-viz]").replaceWith(keep);     // the lines carry on through a new song
+  el.dataset.key = key;
+}
+function vzMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || REC.held) return;
+  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then((stream) => {
+    if (!VZ.el) { stream.getTracks().forEach((t) => t.stop()); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC(), an = ac.createAnalyser();
+    an.fftSize = 4096; an.smoothingTimeConstant = 0.6; an.minDecibels = -92; an.maxDecibels = -18;
+    ac.createMediaStreamSource(stream).connect(an);             // read only: not played back, not recorded
+    Object.assign(VZ, { stream, ac, an, bins: new Uint8Array(an.frequencyBinCount), live: true, quiet: 0, pk: 0.3 });
+  }).catch(() => { VZ.live = false; });
+}
+// One frequency per line, spaced the way ears hear them: 35 Hz on the left to 14 kHz on the right.
+const vzHz = (i) => 35 * Math.pow(14000 / 35, i / (VZ_N - 1));
+function vzMicLevels(out) {
+  const an = VZ.an, b = VZ.bins; an.getByteFrequencyData(b);
+  const per = VZ.ac.sampleRate / an.fftSize;
+  let peak = 0;
+  for (let i = 0; i < VZ_N; i++) {
+    const lo = Math.max(1, Math.floor(vzHz(i) / per)), hi = Math.max(lo + 1, Math.floor(vzHz(i + 1) / per));
+    let s = 0; for (let k = lo; k < hi && k < b.length; k++) s = Math.max(s, b[k]);
+    const v = (s / 255) * (0.8 + 0.5 * i / VZ_N);            // highs are quieter: lift them a little
+    out[i] = v; peak = Math.max(peak, v);
+  }
+  VZ.pk = Math.max(peak, VZ.pk * 0.995, 0.22);                // a slow automatic gain: loud and soft rooms both fill it
+  for (let i = 0; i < VZ_N; i++) out[i] = Math.pow(Math.min(1, out[i] / VZ.pk), 1.6);
+  return peak;
+}
+const nz = (x) => Math.sin(x) * 0.5 + Math.sin(x * 2.17 + 1.3) * 0.3 + Math.sin(x * 4.91 + 0.7) * 0.2;   // a smooth wander
+function vzSimLevels(out, t) {
+  const beat = t * 2.0;                                     // about 120 a minute: a kick on the beat, a hat between
+  const kick = Math.exp(-(beat % 1) * 5.5), hat = Math.exp(-((beat + 0.5) % 1) * 11), snare = Math.exp(-((beat / 2 + 0.5) % 1) * 7);
+  for (let i = 0; i < VZ_N; i++) {
+    const x = i / (VZ_N - 1), w = 0.5 + 0.5 * nz(t * 1.3 + i * 0.37);
+    const bass = Math.exp(-x * 9) * (0.45 + 0.55 * kick);
+    const mid = Math.exp(-Math.pow((x - 0.42) / 0.22, 2)) * (0.3 + 0.35 * w + 0.3 * snare);
+    const high = Math.exp(-Math.pow((x - 0.8) / 0.18, 2)) * (0.15 + 0.25 * w + 0.45 * hat);
+    out[i] = Math.max(0, Math.min(1, (bass + mid + high) * (0.75 + 0.35 * nz(t * 3.1 + i * 1.7))));
+  }
+}
+function vzFrame(ms) {
+  if (!VZ.el) return;
+  VZ.raf = requestAnimationFrame(vzFrame);
+  const t = ms / 1000, dt = Math.min(0.05, VZ.t ? t - VZ.t : 0.016); VZ.t = t;
+  const n = nowOf(SP()), playing = !!(n && n.playing);
+  const tgt = new Array(VZ_N).fill(0.02);
+  if (playing) {
+    let heard = false;
+    if (VZ.live && VZ.an) { const pk = vzMicLevels(tgt); VZ.quiet = pk < 0.12 ? VZ.quiet + dt : 0; heard = VZ.quiet < 2.5; }
+    if (!heard) vzSimLevels(tgt, t);
+  }
+  for (let i = 0; i < VZ_N; i++) {                          // quick to rise, slow to fall, like a real meter
+    VZ.lv[i] += (tgt[i] - VZ.lv[i]) * (tgt[i] > VZ.lv[i] ? 0.55 : 0.09);
+  }
+  const cv = VZ.el.querySelector("[data-viz]"); if (!cv) return;
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height, base = H * 0.74;
+  g.clearRect(0, 0, W, H);
+  const p = posNow(), frac = n && n.duration && p != null ? p / n.duration : 0;
+  const gap = W / VZ_N, lw = gap * 0.42;
+  g.lineCap = "round"; g.lineWidth = lw;
+  for (let i = 0; i < VZ_N; i++) {
+    const v = (VZ.lv[Math.max(0, i - 1)] + VZ.lv[i] * 2 + VZ.lv[Math.min(VZ_N - 1, i + 1)]) / 4;   // neighbours soften it
+    const x = gap * (i + 0.5), h = Math.max(lw * 0.6, v * base * 0.95);
+    const done = (i + 0.5) / VZ_N <= frac;                  // the part of the song already played is brighter
+    g.strokeStyle = done ? "rgba(255,255,255,.92)" : "rgba(255,255,255,.36)";
+    g.beginPath(); g.moveTo(x, base); g.lineTo(x, base - h); g.stroke();
+    g.strokeStyle = done ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.08)";   // a faint reflection
+    g.beginPath(); g.moveTo(x, base + lw * 1.6); g.lineTo(x, base + lw * 1.6 + h * 0.3); g.stroke();
+  }
+  const ph = VZ.el.querySelector("[data-bpos]"); if (ph) { const tx = p != null ? mmss(p) : ""; if (ph.textContent !== tx) ph.textContent = tx; }
+}
 
 // for the tests and for checking from the iMac
 window.__wall = { S, get pending() { return pending.length; }, get conn() { return S.conn; } };

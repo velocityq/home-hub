@@ -19,6 +19,10 @@ Schedules: each light can have a few (lights.schedule / lights.unschedule), kept
 The hub runs them, by this computer's clock, so they only happen while the hub is running. At its time on its
 days a schedule turns the light on or off; with a fade it starts dim and warm and climbs to its brightness over
 that many minutes (or dims down and then turns off). A change made by hand during a fade stops the fade.
+
+Disco (lights.disco): the hub sends each bulb of a light a new bright colour every moment, the bulbs of one
+light a few colours apart. Turning it off puts back the look from before; any other change, or a schedule
+starting, stops it where it is. Like schedules, it only runs while the hub does.
 """
 from __future__ import annotations
 
@@ -50,6 +54,10 @@ SCHEDULE_FILE = "light-schedules.json"
 TICK = 15           # seconds between two looks at the schedules
 LATE = 120          # seconds after its time a schedule may still start (the hub was busy or just started)
 FADE_STEP = 20      # seconds between two steps of a fade, at most
+# Disco: seconds between two colours, and the colours it goes through (each bulb of a light a few steps apart).
+DISCO_EVERY = {"slow": 2.5, "medium": 1.0, "fast": 0.4}
+DISCO_COLOURS = [(255, 0, 0), (255, 120, 0), (255, 230, 0), (0, 255, 60), (0, 220, 255), (0, 60, 255),
+                 (150, 0, 255), (255, 0, 200)]
 
 
 def _hex(r, g, b):
@@ -120,6 +128,8 @@ class Lights:
         self.schedules = {}     # light id -> [schedule], in time order
         self._fired = {}        # schedule id -> the start it last ran for (so it runs once)
         self._fades = {}        # light id -> the task running its scheduled change
+        self._discos = {}       # light id -> (the task running its disco, its speed)
+        self.disco_every = dict(DISCO_EVERY)     # tests make it short
         self._load_schedules()
 
     # ---------- life ----------
@@ -150,7 +160,7 @@ class Lights:
                        asyncio.create_task(self._scheduler(), name="lights-schedules")]
 
     async def stop(self):
-        for t in list(self._fades.values()):
+        for t in list(self._fades.values()) + [t for t, _ in self._discos.values()]:
             t.cancel()
         for t in self._tasks:
             t.cancel()
@@ -224,7 +234,7 @@ class Lights:
                     self._swept = now
                     await self._sweep(lost)
                 for b in lost:               # a bulb that has just gone quiet: the wall should say so
-                    if b["pilot"]:
+                    if b["pilot"] and time.time() - b["seen"] > GONE:    # (and did not answer during the search)
                         b["pilot"] = {}
                         self.on_change()
             except asyncio.CancelledError:
@@ -267,6 +277,7 @@ class Lights:
         for r in rows:
             r["schedules"] = [dict(s) for s in self.schedules.get(r["id"], [])]
             r["fading"] = r["id"] in self._fades
+            r["disco"] = self._discos[r["id"]][1] if r["id"] in self._discos else None
         return {"available": any(r["available"] for r in rows), "devices": rows}
 
     # ---------- schedules ----------
@@ -353,6 +364,7 @@ class Lights:
                     self._fired[s["id"]] = start.isoformat()
                     log.info("lights: schedule %s %s at %s", lid, s["do"], s["time"])
                     self._stop_fade(lid)
+                    self._stop_disco(lid, restore=False)
                     self._fades[lid] = asyncio.create_task(self._run(lid, s), name=f"lights-run-{lid}")
                     self.on_change()
 
@@ -361,6 +373,74 @@ class Lights:
             t = self._fades.pop(k, None)
             if t is not None and t is not asyncio.current_task():
                 t.cancel()
+                self.on_change()
+
+    # ---------- disco ----------
+    def _stop_disco(self, lid, restore=True):
+        """Stop disco on a light (or every light). restore puts back the look it had before disco started."""
+        for k in ([lid] if lid != C.LIGHT_ALL else list(self._discos)):
+            got = self._discos.pop(k, None)
+            if got is None:
+                continue
+            got[0].cancel()
+            if restore:
+                for b in got[2]:
+                    if b["was"]:
+                        self._send(b["bulb"]["ip"], "setPilot", b["was"])
+            self.on_change()
+
+    async def _start_disco(self, bulbs, speed):
+        by_light = {}
+        for b in bulbs:
+            by_light.setdefault(b["id"], []).append(b)
+        # The look to go back to: taken before the first colour (or kept, when only the speed changes).
+        saved = {lid: (self._discos[lid][2] if lid in self._discos else
+                       [{"bulb": b, "was": self._look(b["pilot"])} for b in bs]) for lid, bs in by_light.items()}
+        # The first colour goes out and waits for the bulbs' answer, so a refusal is said at once.
+        first = [(b, self._disco_params(b, i, 0)) for bs in by_light.values() for i, b in enumerate(bs)]
+        answers = await asyncio.gather(*(self._ask(b["ip"], "setPilot", p) for b, p in first))
+        if not all(r and r.get("success") for r in answers):
+            await self._apply([b for b, _ in first], first[0][1])   # says why in plain words
+        for lid, bs in by_light.items():
+            self._stop_disco(lid, restore=False)
+            task = asyncio.create_task(self._disco(lid, bs, speed), name=f"lights-disco-{lid}")
+            self._discos[lid] = (task, speed, saved[lid])
+        self.on_change()
+
+    @staticmethod
+    def _look(p):
+        """The setPilot that brings back a bulb's look from its last reading (before disco took it over)."""
+        if not p:
+            return None
+        if not p.get("state"):
+            return {"state": False}
+        out = {"state": True}
+        if p.get("dimming"):
+            out["dimming"] = p["dimming"]
+        if p.get("temp"):
+            out["temp"] = p["temp"]
+        elif any(k in p for k in ("r", "g", "b")):
+            out.update({k: int(p.get(k) or 0) for k in ("r", "g", "b")})
+        return out
+
+    def _disco_params(self, b, i, step):
+        r, g, bl = DISCO_COLOURS[(step + i * 3) % len(DISCO_COLOURS)]
+        return {"state": True, "dimming": 100, "r": r, "g": g, "b": bl}
+
+    async def _disco(self, lid, bulbs, speed):
+        step = 1
+        try:
+            while True:
+                await asyncio.sleep(self.disco_every[speed])
+                for i, b in enumerate(bulbs):           # sent and not waited for: the next colour is soon anyway
+                    self._send(b["ip"], "setPilot", self._disco_params(b, i, step))
+                step += 1
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.info("lights: disco on %s stopped: %s", lid, type(e).__name__)
+            if lid in self._discos and self._discos[lid][0] is asyncio.current_task():
+                self._discos.pop(lid, None)
                 self.on_change()
 
     async def _run(self, lid, s):
@@ -426,8 +506,17 @@ class Lights:
         if action in ("lights.schedule", "lights.unschedule"):
             self._schedule(action, a)
             return
+        if action == "lights.disco" and not a["on"]:
+            if a["light"] != C.LIGHT_ALL and not any(b["id"] == a["light"] for b in self.bulbs):
+                raise Conflict("That is not one of this house's lights.")
+            self._stop_disco(a["light"])
+            return
         bulbs = self._targets(a["light"])
         self._stop_fade(a["light"])     # a change by hand wins over a scheduled fade
+        if action == "lights.disco":
+            await self._start_disco(bulbs, a.get("speed") or "medium")
+            return
+        self._stop_disco(a["light"], restore=False)     # and over disco
         if action == "lights.power":
             params = {"state": a["on"]}
         elif action == "lights.brightness":

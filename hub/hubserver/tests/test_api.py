@@ -60,7 +60,7 @@ async def test_state_shape(hub):
     assert [d["name"] for d in tv["devices"]] == ["Living Room", "Bedroom", "The Frame"]
     assert tv["devices"][0]["app"] == "YouTube" and tv["devices"][0]["volume"] == 18
     assert tv["devices"][2]["art_mode"] is True
-    assert tv["apps"] == ["YouTube", "Netflix", "ABC iview"]
+    assert tv["apps"] == ["YouTube", "Netflix", "ABC iview", "Spotify"]
 
 
 async def test_actions_list(hub):

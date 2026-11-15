@@ -48,6 +48,7 @@ def build(cfg, keys=None):
     aircon = Aircon(cfg, on_change=changed, remember=cfgmod.remember, recall=cfgmod.recall)
     speakers = Speakers(cfg, on_change=changed, backend=RealCast(cfg, notify=changed_threadsafe), spotify=spotify)
     tvs = Tvs(cfg, on_change=changed)
+    speakers.tvs = tvs              # Spotify mode: a TV that is off still shows under Play on, and wakes when picked
     from .lights import Lights
     lights = Lights(cfg, on_change=changed) if cfg.get("lights") else None
     hub = Hub(cfg, aircon, speakers, tvs, spotify, lights=lights)

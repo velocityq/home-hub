@@ -36,6 +36,7 @@ class Speakers:
         # itself: whatever is playing on the account, on any of its Spotify Connect devices (phone, computer,
         # TV, speaker), and music.device moves it between them.
         self.spotify_only = str(cfg.get("music") or "").lower() == "spotify"
+        self.tvs = None             # the TV adapter (set by the hub): TVs that are off show as Spotify devices too
 
     async def start(self):
         if not self.spotify_only:
@@ -167,13 +168,67 @@ class Speakers:
         linked = bool(self.spotify and self.spotify.linked)
         out = {"linked": linked}
         if linked:
-            out["devices"] = [dict(d) for d in self.spotify.devs]
+            out["devices"] = self._devices_with_tvs()
             q = self.spotify.quick
             out["playlists"] = q.get("playlists") or []
             last = q.get("last") or {}
             out["last"] = (f"{last['title']} · {last['artist']}" if last.get("title") and last.get("artist")
                            else last.get("title"))
         return out
+
+    # ---------- TVs as Spotify devices (Spotify mode) ----------
+    # Spotify only lists a TV while its Spotify app is open. So every house TV is listed: as its real Spotify
+    # device when Spotify can see it, else as "tv-<id>" (asleep). Picking an asleep one wakes the TV, opens
+    # Spotify on it, waits for it to appear and moves the music there. Which Spotify device is which TV is
+    # learnt the first time (the TV device that appears after opening Spotify there) and kept in spotify-prefs.
+    TV_PREFIX = "tv-"
+
+    def _tv_ids(self):
+        t = self.tvs
+        return list(getattr(t, "present", [])) if (t and self.spotify_only) else []
+
+    def _tv_map(self):
+        m = (self.spotify.prefs().get("tv_devices") if self.spotify else None) or {}
+        return m if isinstance(m, dict) else {}
+
+    def _devices_with_tvs(self):
+        devs = [dict(d) for d in self.spotify.devs]
+        m = self._tv_map()
+        for tv in self._tv_ids():
+            real = next((d for d in devs if d["id"] == m.get(tv)), None)
+            if real is not None:
+                real["tv"] = tv
+                continue
+            devs.append({"id": self.TV_PREFIX + tv, "name": self.tvs.names.get(tv, tv), "type": "tv", "active": False,
+                         "volume": None, "restricted": False, "tv": tv, "asleep": True})
+        return devs
+
+    async def _wake_tv_for_spotify(self, tv):
+        """Turn the TV on if needed, open Spotify on it, and return its Spotify device id once Spotify lists it."""
+        name = self.tvs.names.get(tv, tv)
+        known_before = {d["id"] for d in self.spotify.devs}
+        if self.tvs._row(tv)["power"] != "on":
+            await self.tvs.do("tv.power", {"tv": tv, "on": True})
+        try:
+            await self.tvs.do("tv.launch", {"tv": tv, "app": "Spotify"})
+        except Conflict:
+            raise Conflict(f"The {name} TV has no Spotify app. Install Spotify on it and sign in once.") from None
+        m = self._tv_map()
+        others = {v for k, v in m.items() if k != tv}
+        for _ in range(25):
+            devs = await self.spotify.refresh_devices()
+            mine = next((d for d in devs if d["id"] == m.get(tv)), None)
+            if mine is None:      # first time: the TV-type device that appeared, or the only unclaimed TV device
+                new = [d for d in devs if d["type"] == "tv" and d["id"] not in others and d["id"] not in known_before]
+                free = [d for d in devs if d["type"] == "tv" and d["id"] not in others]
+                mine = (new or (free if len(free) == 1 else [None]))[0]
+            if mine is not None:
+                m[tv] = mine["id"]
+                self.spotify.save_prefs(tv_devices=m)
+                return mine["id"]
+            await asyncio.sleep(1)
+        raise Conflict(f"Spotify is open on the {name} TV but doesn't show it yet. Check you're signed in to Spotify "
+                       f"on the TV with the same account, then try again.")
 
     # ---------- doing ----------
     def _need_any(self, snap):
@@ -259,7 +314,13 @@ class Speakers:
                 raise NeedsSpotify("Spotify is not linked yet. Link it on this computer first.")
             if action == "music.device":
                 devs = await self.spotify.refresh_devices()
-                d = next((x for x in devs if x["id"] == a["device"]), None)
+                want = a["device"]
+                if want.startswith(self.TV_PREFIX) and want[len(self.TV_PREFIX):] in self._tv_ids():
+                    want = self._tv_map().get(want[len(self.TV_PREFIX):]) or want
+                    if not any(x["id"] == want for x in devs):          # asleep, or Spotify not open there
+                        want = await self._wake_tv_for_spotify(a["device"][len(self.TV_PREFIX):])
+                        devs = self.spotify.devs
+                d = next((x for x in devs if x["id"] == want), None)
                 if d is None:
                     raise Conflict("Spotify can't see that device right now. Open Spotify on it, then try again.")
                 if d["restricted"]:

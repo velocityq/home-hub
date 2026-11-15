@@ -33,6 +33,8 @@ DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 SCHEDULE_DO = ["on", "off"]
 FADE_MAX = 60                                         # minutes
 SCHEDULES_MAX = 8                                     # per light
+# Disco: the hub switches a light's bulbs through bright colours, each bulb its own, until told to stop.
+DISCO_SPEEDS = ["slow", "medium", "fast"]
 
 
 class ContractError(ValueError):
@@ -195,6 +197,11 @@ ACTIONS: dict[str, tuple[str, dict, set]] = {
                      {"light", "kelvin"}),
     "lights.color": ("Set a light to a colour, as #rrggbb (or 'all'). Also turns it on.",
                      {"light": _light, "color": _color}, {"light", "color"}),
+    "lights.disco": ("Start or stop disco on a light (or 'all'): its bulbs switch through bright colours, each "
+                     "bulb its own, at a speed of " + ", ".join(DISCO_SPEEDS) + " (default medium). Any other "
+                     "change to the light, or one of its schedules starting, stops it.",
+                     {"light": _light, "on": lambda v: _bool(v, "on"),
+                      "speed": lambda v: _choice(v, "speed", DISCO_SPEEDS)}, {"light", "on"}),
     "lights.schedule": ("Add a schedule to a light, or change one (give its id as schedule): at time (HH:MM, 24 hour) "
                         "on the days given (" + ", ".join(DAYS) + "), do 'on' or 'off'. fade is minutes "
                         f"(0 to {FADE_MAX}) to fade in from dim and warm, or out to off, starting at that time. "
@@ -301,10 +308,11 @@ EXAMPLE_STATE = {
                  {"id": "a1b2c3", "time": "06:40", "days": ["mon", "tue", "wed", "thu", "fri"], "do": "on",
                   "brightness": 80, "kelvin": 2700, "fade": 20, "enabled": True},
              ],
-             "fading": False},                     # true while a scheduled fade is running
+             "fading": False,                      # true while a scheduled fade is running
+             "disco": None},                       # the disco speed while disco is running, else null
             {"id": "desk", "name": "Desk", "available": True, "on": False, "brightness": 40,
              "kelvin": None, "color": "#ff8800",   # a colour: color is set and kelvin is null
-             "schedules": [], "fading": False},
+             "schedules": [], "fading": False, "disco": None},
         ],
     },
     "tvs": {

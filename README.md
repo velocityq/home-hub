@@ -39,14 +39,18 @@ the ids there and in `config.json` to fit yours.
   optional: a missing device shows as "not answering" and the rest works.
 - No Cast speakers? Set `"music": "spotify"` in `config.json`. The music card then shows whatever the linked
   Spotify account is playing, on any of its devices (phone, computer, TV, speaker), and the music view's Devices
-  tab and Play on row move it between them and set that device's volume. Spotify only allows this for an app
+  tab and Play on row move it between them and set that device's volume. The house TVs are always listed there:
+  picking one that is off turns it on, opens Spotify on it and moves the music there (Spotify must be installed
+  and signed in on the TV once; which Spotify device is which TV is learnt the first time). Spotify only allows this for an app
   registered under a Spotify Premium account.
 - WiZ lights are listed in `config.json` (`"lights": [{"id": "lamp", "name": "Lamp", "mac": "...", "ip": "..."}]`)
   and spoken to directly on the home network, with no WiZ account in the hub. A light can be a room of several
   bulbs (`"bulbs": [{"mac": "...", "ip": "..."}, ...]` in place of one `mac` and `ip`): it shows as one light
   and every change goes to all of them. Each light can have up to 8 schedules (on or off at a time on chosen days,
   at once or fading over up to an hour), set at the bottom of its card in the Lighting panel. The hub runs them by
-  this computer's clock and keeps them in `~/.home-hub/light-schedules.json`, so they only happen while it runs. On the wall, Lighting takes the
+  this computer's clock and keeps them in `~/.home-hub/light-schedules.json`, so they only happen while it runs. Disco
+  (slow, medium or fast, in each light's card) has the hub switch its bulbs through bright colours, each bulb its
+  own; Stop disco puts the light back as it was, and any other change stops it. On the wall, Lighting takes the
   aircon's place when the house has lights and no aircon answering. Bulbs on firmware 1.34 or newer only take
   signed changes: either choose "Allow all controls" under Settings, Security, Allow local communication in the
   WiZ app, or put the home's signing key (the `udp_signing_key` in the WiZ app's local integration export) in

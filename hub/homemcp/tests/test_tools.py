@@ -16,7 +16,7 @@ EXPECTED_TOOLS = {
     "aircon_room", "aircon_all_rooms", "music_control", "music_choose_speakers", "music_search_play", "music_start",
     "speaker_volume", "tv_power", "tv_volume", "tv_mute", "tv_open_app", "tv_play_title", "tv_remote", "frame_art_mode",
     "music_device", "music_volume",
-    "light_power", "light_brightness", "light_white", "light_color", "light_schedule", "light_unschedule",
+    "light_power", "light_brightness", "light_white", "light_color", "light_disco", "light_schedule", "light_unschedule",
 }
 
 # tool, tool arguments, the action the hub should log, the args the hub should log, words in the answer
@@ -62,6 +62,8 @@ CALLS = [
                         "brightness": 80}, "lights.schedule",
      {"light": "desk", "time": "06:40", "days": ["mon", "fri"], "do": "on", "fade": 20, "brightness": 80},
      "06:40 mon,fri: on to 80%, fading over 20 min"),
+    ("light_disco", {"light": "lamp", "on": True, "speed": "fast"}, "lights.disco",
+     {"light": "lamp", "on": True, "speed": "fast"}, "Lamp"),
     ("light_unschedule", {"light": "lamp", "schedule": "a1b2c3"}, "lights.unschedule",
      {"light": "lamp", "schedule": "a1b2c3"}, "Schedule removed"),
 ]

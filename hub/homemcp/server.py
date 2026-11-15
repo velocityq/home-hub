@@ -413,6 +413,19 @@ async def light_color(
     return await _act("lights.color", {"light": light, "color": color}, lambda s: summary.lights_summary(s, light))
 
 
+@tool("Light disco")
+async def light_disco(
+    light: Annotated[str, arg(LIGHT_HELP, maxLength=40)],
+    on: Annotated[bool, arg("true to start disco, false to stop it and put the light back as it was.")],
+    speed: Annotated[str, arg("How fast the colours change.", enum=C.DISCO_SPEEDS)] = "medium",
+) -> CallToolResult:
+    """Start or stop disco: the light's bulbs switch through bright colours until it is stopped."""
+    args = {"light": light, "on": on}
+    if on:
+        args["speed"] = speed
+    return await _act("lights.disco", args, lambda s: summary.lights_summary(s, light))
+
+
 @tool("Light schedule")
 async def light_schedule(
     light: Annotated[str, arg("The light's id (house_status lists the lights and their schedules).", maxLength=40)],

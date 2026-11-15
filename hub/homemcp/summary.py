@@ -216,6 +216,8 @@ def light_line(d: dict) -> str:
         line = f"{_name(d)}: on, {d.get('brightness')}%, {look}"
     if d.get("fading"):
         line += ", a scheduled fade is running"
+    if d.get("disco"):
+        line += f", disco is on ({d['disco']})"
     if d.get("schedules"):
         line += "; schedules: " + "; ".join(schedule_text(s) for s in d["schedules"])
     return line

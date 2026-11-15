@@ -100,7 +100,13 @@ class Fake:
                     sch.append(new)
                 sch.sort(key=lambda x: x["time"])
                 return
+            if action == "lights.disco":
+                for d in rows:
+                    d["disco"] = (a.get("speed") or "medium") if a["on"] else None
+                    d["on"] = d["on"] or a["on"]
+                return
             for d in rows:
+                d["disco"] = None
                 if action == "lights.power":
                     d["on"] = a["on"]
                 else:

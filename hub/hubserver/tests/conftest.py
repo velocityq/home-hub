@@ -99,6 +99,7 @@ async def build(home, cast=None, linked=False, bridge_key=None, cfg_bridge_key=N
                       discover=discover or (lambda: _none()), remember=cfgmod.remember, recall=cfgmod.recall)
     c.speakers = Speakers(cfg, on_change=changed, backend=c.cast, spotify=c.spotify)
     c.tvs = Tvs(cfg, on_change=changed)
+    c.speakers.tvs = c.tvs
     c.hub = Hub(cfg, c.aircon, c.speakers, c.tvs, c.spotify)
     holder["hub"] = c.hub
     c.cast.notify = c.hub.changed_threadsafe

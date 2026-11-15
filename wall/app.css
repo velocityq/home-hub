@@ -322,6 +322,18 @@ html.lighter .keypanel .box { box-shadow: none; background: rgb(28, 33, 45); }
 .swatch { width: 48px; height: 48px; border-radius: 50%; flex: none; border: 2px solid rgba(255,255,255,.35); position: relative; }
 .swatch::after { content: ""; position: absolute; left: -4px; right: -4px; top: -4px; bottom: -4px; }
 .swatch.sel { box-shadow: 0 0 0 3px #fff; }
+/* disco: a turning rainbow on the light's dot, and a rainbow edge on its button */
+.lidot.disco { background: conic-gradient(#ff0000, #ffd000, #00ff40, #00e5ff, #0040ff, #8a00ff, #ff00aa, #ff0000) !important;
+  animation: disco-spin 2.5s linear infinite; }
+.lidot.disco.medium { animation-duration: 1.2s; }
+.lidot.disco.fast { animation-duration: .5s; }
+@keyframes disco-spin { to { transform: rotate(360deg); } }
+.pill.discobtn { background: linear-gradient(90deg, rgba(255,0,0,.4), rgba(255,208,0,.4), rgba(0,255,64,.4), rgba(0,229,255,.4),
+  rgba(138,0,255,.4), rgba(255,0,170,.4)); }
+.pill.discobtn.sel { background: linear-gradient(90deg, #ff0000, #ff9a00, #00c040, #00b8e0, #8a00ff, #ff00aa); color: #fff;
+  background-size: 200% 100%; animation: disco-slide 3s linear infinite; }
+@keyframes disco-slide { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .lidot.disco, .pill.discobtn.sel { animation: none; } }
 input[type=range].kelvin::-webkit-slider-runnable-track { background: linear-gradient(to right, rgb(255,170,84), #fff3e0 45%, rgb(222,236,255)); }
 [data-light] .label { font-size: 13px; }
 .sched { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.14); }
@@ -386,3 +398,41 @@ input[type=range].kelvin::-webkit-slider-runnable-track { background: linear-gra
 .msearchbar input::placeholder { color: rgba(255,255,255,.5); }
 .mplayon { padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); align-items: center; }
 .wait { color: var(--dim); font-size: 18px; padding: 8px 4px; }
+
+/* shuffle: an outline that turns green, with a dot, when it is on */
+.btn.shuf { background: transparent !important; color: rgba(255,255,255,.75); width: 56px; height: 56px; position: relative; }
+.btn.shuf.on { color: var(--green); }
+.btn.shuf.on::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 6px; height: 6px; margin-left: -3px; border-radius: 3px; background: var(--green); }
+/* pinned playlists */
+.mpins { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+.mpins::-webkit-scrollbar { display: none; }
+.mpinned { flex: none; width: 210px; height: 72px; border-radius: 18px; background: rgba(255,255,255,.12); display: flex; align-items: center; gap: 12px; padding: 0 14px 0 8px; min-width: 0; }
+.mpinned .mimg { width: 56px; height: 56px; border-radius: 12px; flex: none; }
+.mpinned b { font-size: 16px; font-weight: 600; text-align: left; }
+.mpinned:active { transform: scale(.97); }
+.mcardw { position: relative; min-width: 0; display: flex; }
+.mcardw > .mcard { flex: 1; }
+.mpin { position: absolute; right: 14px; top: 14px; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center;
+  background: rgba(0,0,0,.45); color: #fff; }
+.mpin::after { content: ""; position: absolute; inset: -6px; }
+.mpin.on { background: var(--green); }
+/* the song, full screen */
+.mbig { position: absolute; inset: 0; z-index: 60; overflow: hidden; background: #120d10; color: #fff; }
+.mbig-bg { position: absolute; inset: -80px; background: #3a2230 center / cover no-repeat; filter: blur(70px) saturate(1.3); transform: scale(1.15); }
+.mbig-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,6,8,.45) 0%, rgba(10,6,8,.62) 55%, rgba(8,5,7,.9) 100%); }
+.mbig-x { position: absolute; right: 36px; top: 32px; background: rgba(255,255,255,.14) !important; color: #fff; z-index: 2; }
+.mbig-main { position: absolute; left: 0; right: 0; top: 70px; display: flex; align-items: center; justify-content: center; gap: 56px; padding: 0 80px; }
+.mbig-art { width: 380px; height: 380px; flex: none; border-radius: 10px; background: #3a2230 center / cover no-repeat; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+.mbig-info { gap: 10px; min-width: 0; max-width: 560px; }
+.mbig-title { font-size: 52px; font-weight: 800; line-height: 1.05; letter-spacing: -.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mbig-artist { font-size: 26px; color: rgba(255,255,255,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbig-dev { font-size: 17px; color: rgba(255,255,255,.6); min-height: 22px; display: flex; align-items: center; gap: 8px; }
+.mbig-ctl { gap: 14px; margin-top: 18px; align-items: center; }
+.mbig-viz { position: absolute; left: 40px; right: 40px; bottom: 26px; height: 180px; }
+.mbig-viz canvas { width: 100%; height: 100%; display: block; }
+.mbig-times { position: absolute; left: 4px; right: 4px; bottom: 0; justify-content: space-between; font-size: 14px; color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
+
+/* the music volume: − slider + */
+.mvolrow { gap: 10px; align-items: center; }
+.mvolbtn { width: 48px !important; height: 48px; min-width: 48px; }
+.btn.fill.mvolbtn svg { fill: none; stroke: currentColor; }

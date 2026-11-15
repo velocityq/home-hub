@@ -15,7 +15,8 @@ async def test_spotify_only_house(home):
         assert sp["mode"] == "spotify" and sp["available"] is True and sp["devices"] == [] and sp["groups"] == []
         assert sp["now"]["title"] == "Harvest Moon" and sp["now"]["on"] == []
         assert sp["now"]["device"]["name"] == "Lounge Room Speaker"
-        assert [d["id"] for d in sp["spotify"]["devices"]] == ["dev-lounge", "dev-theatre", "dev-lo"]
+        assert [d["id"] for d in sp["spotify"]["devices"]] == ["dev-lounge", "dev-theatre", "dev-lo",   # Spotify's own
+                                                               "tv-living-room", "tv-bedroom", "tv-frame"]  # the house TVs
 
         s, b = await act(c, "music.device", {"device": "dev-theatre"})
         assert s == 200, b
@@ -46,13 +47,41 @@ async def test_spotify_only_starts_music_with_nothing_playing(home):
         c.spot.app["st"]["player"] = None
         for d in c.spot.app["st"]["devices"]:
             d["is_active"] = False
-        c.spot.app["st"]["devices"].insert(0, {"id": "dev-phone", "name": "Chad's phone", "type": "Smartphone",
+        c.spot.app["st"]["devices"].insert(0, {"id": "dev-phone", "name": "Sam's phone", "type": "Smartphone",
                                                 "is_active": False, "volume_percent": 60})
         await c.spotify.refresh_player()
         assert c.hub.state()["speakers"]["now"] is None
         s, b = await act(c, "music.start", {"what": "liked"})
         assert s == 200, b
         assert b["state"]["speakers"]["now"]["device"]["id"] == "dev-phone"      # a phone or computer, not a TV
+    finally:
+        await close(c)
+
+
+async def test_a_sleeping_tv_wakes_opens_spotify_and_takes_the_music(home):
+    c = await build(home, linked=True, music="spotify")
+    try:
+        assert await wait_for(lambda: len(c.spotify.devs) == 3, 5)
+        devs = c.hub.state()["speakers"]["spotify"]["devices"]
+        tv = next(d for d in devs if d["id"] == "tv-bedroom")
+        assert tv["asleep"] is True and tv["name"] == "Bedroom" and tv["type"] == "tv"
+        st = c.spot.app["st"]
+        real_do = c.tvs.do
+
+        async def tv_do(action, a):                 # opening Spotify on the TV makes it appear in Spotify
+            await real_do(action, a)
+            if action == "tv.launch" and a["app"] == "Spotify":
+                st["devices"].append({"id": "dev-tv-bed", "name": "[TV] Samsung 7 Series", "type": "TV",
+                                      "is_active": False, "volume_percent": 20})
+        c.tvs.do = tv_do
+        s, b = await act(c, "music.device", {"device": "tv-bedroom"})
+        assert s == 200, b
+        assert c.tvs._row("bedroom")["power"] == "on"                              # it was off: turned on
+        assert b["state"]["speakers"]["now"]["device"]["id"] == "dev-tv-bed"       # the music went there
+        assert c.spotify.prefs()["tv_devices"] == {"bedroom": "dev-tv-bed"}       # and it is remembered
+        devs = c.hub.state()["speakers"]["spotify"]["devices"]
+        assert not any(d["id"] == "tv-bedroom" for d in devs)                     # now listed as the real one
+        assert next(d for d in devs if d["id"] == "dev-tv-bed")["tv"] == "bedroom"
     finally:
         await close(c)
 
