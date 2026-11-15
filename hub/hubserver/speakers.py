@@ -132,7 +132,9 @@ class Speakers:
                 "playing": bool(p.get("is_playing")), "source": "spotify", "on": on,
                 "shuffle": bool(p.get("shuffle_state")),
                 "device": {"id": dev.get("id"), "name": dev.get("name"), "type": (dev.get("type") or "").lower(),
-                           "volume": dev.get("volume_percent")} if dev.get("id") else None}
+                           # null when Spotify may not change it (an iPhone keeps its own volume)
+                           "volume": dev.get("volume_percent") if dev.get("supports_volume") is not False else None}
+                if dev.get("id") else None}
 
     def _now(self, snap=None):
         snap = snap or self._snap()

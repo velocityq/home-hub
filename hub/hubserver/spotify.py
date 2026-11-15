@@ -247,7 +247,7 @@ class Spotify:
             log.info("spotify: devices unavailable: %s", e.text)
             return self.devs
         rows = [{"id": d["id"], "name": d.get("name") or "Spotify device", "type": (d.get("type") or "").lower(),
-                 "active": bool(d.get("is_active")), "volume": d.get("volume_percent"),
+                 "active": bool(d.get("is_active")), "volume": d.get("volume_percent") if d.get("supports_volume") is not False else None,
                  "restricted": bool(d.get("is_restricted"))} for d in devs if d.get("id")]
         if rows != self.devs:
             self.devs = rows

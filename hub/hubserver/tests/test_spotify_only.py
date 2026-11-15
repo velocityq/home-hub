@@ -54,6 +54,13 @@ async def test_spotify_only_starts_music_with_nothing_playing(home):
         s, b = await act(c, "music.start", {"what": "liked"})
         assert s == 200, b
         assert b["state"]["speakers"]["now"]["device"]["id"] == "dev-phone"      # a phone or computer, not a TV
+        c.spot.app["st"]["devices"][0]["supports_volume"] = False                # a phone that keeps its own volume
+        await c.spotify.refresh_devices()
+        await c.spotify.refresh_player()
+        sp = c.hub.state()["speakers"]
+        assert next(d for d in sp["spotify"]["devices"] if d["id"] == "dev-phone")["volume"] is None
+        s, b = await act(c, "music.volume", {"value": 30})
+        assert s == 409 and "change its volume" in b["error"]
     finally:
         await close(c)
 

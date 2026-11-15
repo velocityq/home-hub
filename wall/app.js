@@ -821,9 +821,11 @@ function mNow(sp) {
       <button class="btn round fill" data-do="prev" aria-label="Previous song" style="width:60px;height:60px">${svg("prev")}</button>
       <button class="btn round fill white" data-do="playPause" aria-label="${n.playing ? "Pause" : "Play"}" style="width:80px;height:80px;border-radius:40px">${svg(n.playing ? "pause" : "play")}</button>
       <button class="btn round fill" data-do="next" aria-label="Next song" style="width:60px;height:60px">${svg("next")}</button></div>
-    <div class="row mvolrow"><button class="btn round fill mvolbtn" data-do="mVol" data-arg="-10" aria-label="Volume down">${lineIcon("minus", 22)}</button>
-      <input type="range" min="0" max="100" value="${allVol}" data-vol="${spMode(sp) ? "spotify" : "all"}" aria-label="Volume" style="--p:${allVol}%" ${spMode(sp) && devVol == null ? "disabled" : ""}>
-      <button class="btn round fill mvolbtn" data-do="mVol" data-arg="10" aria-label="Volume up">${lineIcon("plus", 22)}</button></div>`;
+    ${spMode(sp) && n.device && devVol == null
+      ? `<div class="mvolnote">${lineIcon(devIcon(n.device), 20)}<span>${esc(n.device.name)} keeps its own volume: Spotify can't change it from here. Use its buttons, or pick another device below.</span></div>`
+      : `<div class="row mvolrow"><button class="btn round fill mvolbtn" data-do="mVol" data-arg="-10" aria-label="Volume down">${lineIcon("minus", 22)}</button>
+      <input type="range" min="0" max="100" value="${allVol}" data-vol="${spMode(sp) ? "spotify" : "all"}" aria-label="Volume" style="--p:${allVol}%">
+      <button class="btn round fill mvolbtn" data-do="mVol" data-arg="10" aria-label="Volume up">${lineIcon("plus", 22)}</button></div>`}`;
 }
 function mPlayOn(sp) {
   if (spMode(sp)) {

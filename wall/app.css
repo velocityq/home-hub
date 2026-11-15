@@ -436,3 +436,6 @@ input[type=range].kelvin::-webkit-slider-runnable-track { background: linear-gra
 .mvolrow { gap: 10px; align-items: center; }
 .mvolbtn { width: 48px !important; height: 48px; min-width: 48px; }
 .btn.fill.mvolbtn svg { fill: none; stroke: currentColor; }
+.mvolnote { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.35; color: rgba(255,255,255,.7);
+  padding: 10px 14px; border-radius: 16px; background: rgba(255,255,255,.08); }
+.mvolnote svg { flex: none; margin-top: 1px; }
