@@ -2030,10 +2030,9 @@ fit(); renderScene(); render();
 connect();
 
 // ---------- the song, full screen (tap the cover in the Music panel) ----------
-// The lines at the bottom move with the sound in the room: the tablet's microphone is read by the browser's own
-// analyser, low notes on the left to high on the right. Nothing is recorded, kept or sent. With no microphone, or
-// while the music plays somewhere the tablet cannot hear, they move on their own in the same shape.
-const VZ = { el: null, raf: 0, stream: null, ac: null, an: null, bins: null, live: false, quiet: 0, lv: [], pk: 0.3, t: 0 };
+// The lines at the bottom move like a music meter, low notes on the left to high on the right. They never use the
+// microphone: the tablet's mic is only ever on while the talk button is held.
+const VZ = { el: null, raf: 0, lv: [], t: 0 };
 const VZ_N = 104;
 // With music playing and no touch for 30 s, the song view comes up by itself (any touch counts as use).
 const BIG_AFTER = 30000;
@@ -2054,15 +2053,11 @@ function bigOpen() {
   bigUpdate();
   el.animate([{ opacity: 0, transform: "scale(1.03)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.32,.72,0,1)" });
   VZ.lv = new Array(VZ_N).fill(0.02); VZ.t = 0;
-  vzMic();
   VZ.raf = requestAnimationFrame(vzFrame);
 }
 function bigClose() {
   const el = VZ.el; if (!el) return;
   VZ.el = null; cancelAnimationFrame(VZ.raf);
-  if (VZ.stream) VZ.stream.getTracks().forEach((t) => t.stop());
-  if (VZ.ac) VZ.ac.close().catch(() => {});
-  VZ.stream = VZ.ac = VZ.an = null; VZ.live = false;
   el.style.pointerEvents = "none";
   el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "forwards" }).onfinish = () => el.remove();
 }
@@ -2098,33 +2093,6 @@ function bigUpdate() {
   if (keep) el.querySelector("[data-viz]").replaceWith(keep);     // the lines carry on through a new song
   el.dataset.key = key;
 }
-function vzMic() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || REC.held) return;
-  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }).then((stream) => {
-    if (!VZ.el) { stream.getTracks().forEach((t) => t.stop()); return; }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ac = new AC(), an = ac.createAnalyser();
-    an.fftSize = 4096; an.smoothingTimeConstant = 0.6; an.minDecibels = -92; an.maxDecibels = -18;
-    ac.createMediaStreamSource(stream).connect(an);             // read only: not played back, not recorded
-    Object.assign(VZ, { stream, ac, an, bins: new Uint8Array(an.frequencyBinCount), live: true, quiet: 0, pk: 0.3 });
-  }).catch(() => { VZ.live = false; });
-}
-// One frequency per line, spaced the way ears hear them: 35 Hz on the left to 14 kHz on the right.
-const vzHz = (i) => 35 * Math.pow(14000 / 35, i / (VZ_N - 1));
-function vzMicLevels(out) {
-  const an = VZ.an, b = VZ.bins; an.getByteFrequencyData(b);
-  const per = VZ.ac.sampleRate / an.fftSize;
-  let peak = 0;
-  for (let i = 0; i < VZ_N; i++) {
-    const lo = Math.max(1, Math.floor(vzHz(i) / per)), hi = Math.max(lo + 1, Math.floor(vzHz(i + 1) / per));
-    let s = 0; for (let k = lo; k < hi && k < b.length; k++) s = Math.max(s, b[k]);
-    const v = (s / 255) * (0.8 + 0.5 * i / VZ_N);            // highs are quieter: lift them a little
-    out[i] = v; peak = Math.max(peak, v);
-  }
-  VZ.pk = Math.max(peak, VZ.pk * 0.995, 0.22);                // a slow automatic gain: loud and soft rooms both fill it
-  for (let i = 0; i < VZ_N; i++) out[i] = Math.pow(Math.min(1, out[i] / VZ.pk), 1.6);
-  return peak;
-}
 const nz = (x) => Math.sin(x) * 0.5 + Math.sin(x * 2.17 + 1.3) * 0.3 + Math.sin(x * 4.91 + 0.7) * 0.2;   // a smooth wander
 function vzSimLevels(out, t) {
   const beat = t * 2.0;                                     // about 120 a minute: a kick on the beat, a hat between
@@ -2140,14 +2108,10 @@ function vzSimLevels(out, t) {
 function vzFrame(ms) {
   if (!VZ.el) return;
   VZ.raf = requestAnimationFrame(vzFrame);
-  const t = ms / 1000, dt = Math.min(0.05, VZ.t ? t - VZ.t : 0.016); VZ.t = t;
+  const t = ms / 1000; VZ.t = t;
   const n = nowOf(SP()), playing = !!(n && n.playing);
   const tgt = new Array(VZ_N).fill(0.02);
-  if (playing) {
-    let heard = false;
-    if (VZ.live && VZ.an) { const pk = vzMicLevels(tgt); VZ.quiet = pk < 0.12 ? VZ.quiet + dt : 0; heard = VZ.quiet < 2.5; }
-    if (!heard) vzSimLevels(tgt, t);
-  }
+  if (playing) vzSimLevels(tgt, t);
   for (let i = 0; i < VZ_N; i++) {                          // quick to rise, slow to fall, like a real meter
     VZ.lv[i] += (tgt[i] - VZ.lv[i]) * (tgt[i] > VZ.lv[i] ? 0.55 : 0.09);
   }
